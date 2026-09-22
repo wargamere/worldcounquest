@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-canvas: #0b1120;
+  --color-ink: #e2e8f0;
+}
+
+html,
+body {
+  height: 100%;
+}
