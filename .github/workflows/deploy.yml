@@ -40,6 +40,10 @@ jobs:
 
       - uses: actions/configure-pages@v5
         id: pages
+        with:
+          # Turns Pages on for the repo if it is not already enabled, so the
+          # first deploy does not need a manual settings change.
+          enablement: true
 
       - name: Build static export
         # A project site is served from /<repo>, so every asset needs that prefix.
