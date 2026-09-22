@@ -1,0 +1,1052 @@
+[
+  {
+    "id": "004",
+    "name": "Afghanistan",
+    "population": 42000000,
+    "economyTier": 1
+  },
+  {
+    "id": "008",
+    "name": "Albania",
+    "population": 2800000,
+    "economyTier": 2
+  },
+  {
+    "id": "012",
+    "name": "Algeria",
+    "population": 45000000,
+    "economyTier": 2
+  },
+  {
+    "id": "024",
+    "name": "Angola",
+    "population": 36000000,
+    "economyTier": 2
+  },
+  {
+    "id": "031",
+    "name": "Azerbaijan",
+    "population": 10100000,
+    "economyTier": 2
+  },
+  {
+    "id": "032",
+    "name": "Argentina",
+    "population": 46000000,
+    "economyTier": 3
+  },
+  {
+    "id": "036",
+    "name": "Australia",
+    "population": 26000000,
+    "economyTier": 5
+  },
+  {
+    "id": "040",
+    "name": "Austria",
+    "population": 9100000,
+    "economyTier": 5
+  },
+  {
+    "id": "044",
+    "name": "Bahamas",
+    "population": 410000,
+    "economyTier": 4
+  },
+  {
+    "id": "050",
+    "name": "Bangladesh",
+    "population": 173000000,
+    "economyTier": 2
+  },
+  {
+    "id": "051",
+    "name": "Armenia",
+    "population": 2800000,
+    "economyTier": 3
+  },
+  {
+    "id": "056",
+    "name": "Belgium",
+    "population": 11700000,
+    "economyTier": 5
+  },
+  {
+    "id": "064",
+    "name": "Bhutan",
+    "population": 790000,
+    "economyTier": 2
+  },
+  {
+    "id": "068",
+    "name": "Bolivia",
+    "population": 12000000,
+    "economyTier": 2
+  },
+  {
+    "id": "070",
+    "name": "Bosnia and Herz.",
+    "population": 3200000,
+    "economyTier": 2
+  },
+  {
+    "id": "072",
+    "name": "Botswana",
+    "population": 2600000,
+    "economyTier": 3
+  },
+  {
+    "id": "076",
+    "name": "Brazil",
+    "population": 216000000,
+    "economyTier": 3
+  },
+  {
+    "id": "084",
+    "name": "Belize",
+    "population": 410000,
+    "economyTier": 2
+  },
+  {
+    "id": "090",
+    "name": "Solomon Is.",
+    "population": 740000,
+    "economyTier": 1
+  },
+  {
+    "id": "096",
+    "name": "Brunei",
+    "population": 450000,
+    "economyTier": 4
+  },
+  {
+    "id": "100",
+    "name": "Bulgaria",
+    "population": 6500000,
+    "economyTier": 3
+  },
+  {
+    "id": "104",
+    "name": "Myanmar",
+    "population": 54000000,
+    "economyTier": 1
+  },
+  {
+    "id": "108",
+    "name": "Burundi",
+    "population": 13000000,
+    "economyTier": 1
+  },
+  {
+    "id": "112",
+    "name": "Belarus",
+    "population": 9200000,
+    "economyTier": 3
+  },
+  {
+    "id": "116",
+    "name": "Cambodia",
+    "population": 17000000,
+    "economyTier": 2
+  },
+  {
+    "id": "120",
+    "name": "Cameroon",
+    "population": 28000000,
+    "economyTier": 1
+  },
+  {
+    "id": "124",
+    "name": "Canada",
+    "population": 39000000,
+    "economyTier": 5
+  },
+  {
+    "id": "140",
+    "name": "Central African Rep.",
+    "population": 5700000,
+    "economyTier": 1
+  },
+  {
+    "id": "144",
+    "name": "Sri Lanka",
+    "population": 22000000,
+    "economyTier": 2
+  },
+  {
+    "id": "148",
+    "name": "Chad",
+    "population": 18000000,
+    "economyTier": 1
+  },
+  {
+    "id": "152",
+    "name": "Chile",
+    "population": 20000000,
+    "economyTier": 4
+  },
+  {
+    "id": "156",
+    "name": "China",
+    "population": 1420000000,
+    "economyTier": 3
+  },
+  {
+    "id": "158",
+    "name": "Taiwan",
+    "population": 23000000,
+    "economyTier": 5
+  },
+  {
+    "id": "170",
+    "name": "Colombia",
+    "population": 52000000,
+    "economyTier": 3
+  },
+  {
+    "id": "178",
+    "name": "Congo",
+    "population": 6100000,
+    "economyTier": 1
+  },
+  {
+    "id": "180",
+    "name": "Dem. Rep. Congo",
+    "population": 102000000,
+    "economyTier": 1
+  },
+  {
+    "id": "188",
+    "name": "Costa Rica",
+    "population": 5200000,
+    "economyTier": 3
+  },
+  {
+    "id": "191",
+    "name": "Croatia",
+    "population": 3900000,
+    "economyTier": 4
+  },
+  {
+    "id": "192",
+    "name": "Cuba",
+    "population": 11000000,
+    "economyTier": 2
+  },
+  {
+    "id": "196",
+    "name": "Cyprus",
+    "population": 1300000,
+    "economyTier": 4
+  },
+  {
+    "id": "203",
+    "name": "Czechia",
+    "population": 10500000,
+    "economyTier": 4
+  },
+  {
+    "id": "204",
+    "name": "Benin",
+    "population": 13000000,
+    "economyTier": 1
+  },
+  {
+    "id": "208",
+    "name": "Denmark",
+    "population": 5900000,
+    "economyTier": 5
+  },
+  {
+    "id": "214",
+    "name": "Dominican Rep.",
+    "population": 11000000,
+    "economyTier": 3
+  },
+  {
+    "id": "218",
+    "name": "Ecuador",
+    "population": 18000000,
+    "economyTier": 2
+  },
+  {
+    "id": "222",
+    "name": "El Salvador",
+    "population": 6300000,
+    "economyTier": 2
+  },
+  {
+    "id": "226",
+    "name": "Eq. Guinea",
+    "population": 1700000,
+    "economyTier": 2
+  },
+  {
+    "id": "231",
+    "name": "Ethiopia",
+    "population": 126000000,
+    "economyTier": 1
+  },
+  {
+    "id": "232",
+    "name": "Eritrea",
+    "population": 3700000,
+    "economyTier": 1
+  },
+  {
+    "id": "233",
+    "name": "Estonia",
+    "population": 1400000,
+    "economyTier": 4
+  },
+  {
+    "id": "238",
+    "name": "Falkland Is.",
+    "population": 3600,
+    "economyTier": 3
+  },
+  {
+    "id": "242",
+    "name": "Fiji",
+    "population": 930000,
+    "economyTier": 2
+  },
+  {
+    "id": "246",
+    "name": "Finland",
+    "population": 5600000,
+    "economyTier": 5
+  },
+  {
+    "id": "250",
+    "name": "France",
+    "population": 68000000,
+    "economyTier": 5
+  },
+  {
+    "id": "262",
+    "name": "Djibouti",
+    "population": 1100000,
+    "economyTier": 1
+  },
+  {
+    "id": "266",
+    "name": "Gabon",
+    "population": 2400000,
+    "economyTier": 2
+  },
+  {
+    "id": "268",
+    "name": "Georgia",
+    "population": 3700000,
+    "economyTier": 2
+  },
+  {
+    "id": "270",
+    "name": "Gambia",
+    "population": 2800000,
+    "economyTier": 1
+  },
+  {
+    "id": "275",
+    "name": "Palestine",
+    "population": 5300000,
+    "economyTier": 1
+  },
+  {
+    "id": "276",
+    "name": "Germany",
+    "population": 84000000,
+    "economyTier": 5
+  },
+  {
+    "id": "288",
+    "name": "Ghana",
+    "population": 34000000,
+    "economyTier": 2
+  },
+  {
+    "id": "300",
+    "name": "Greece",
+    "population": 10400000,
+    "economyTier": 4
+  },
+  {
+    "id": "304",
+    "name": "Greenland",
+    "population": 57000,
+    "economyTier": 4
+  },
+  {
+    "id": "320",
+    "name": "Guatemala",
+    "population": 18000000,
+    "economyTier": 2
+  },
+  {
+    "id": "324",
+    "name": "Guinea",
+    "population": 14000000,
+    "economyTier": 1
+  },
+  {
+    "id": "328",
+    "name": "Guyana",
+    "population": 800000,
+    "economyTier": 2
+  },
+  {
+    "id": "332",
+    "name": "Haiti",
+    "population": 12000000,
+    "economyTier": 1
+  },
+  {
+    "id": "340",
+    "name": "Honduras",
+    "population": 10000000,
+    "economyTier": 2
+  },
+  {
+    "id": "348",
+    "name": "Hungary",
+    "population": 9600000,
+    "economyTier": 4
+  },
+  {
+    "id": "352",
+    "name": "Iceland",
+    "population": 380000,
+    "economyTier": 5
+  },
+  {
+    "id": "356",
+    "name": "India",
+    "population": 1430000000,
+    "economyTier": 2
+  },
+  {
+    "id": "360",
+    "name": "Indonesia",
+    "population": 278000000,
+    "economyTier": 3
+  },
+  {
+    "id": "364",
+    "name": "Iran",
+    "population": 89000000,
+    "economyTier": 2
+  },
+  {
+    "id": "368",
+    "name": "Iraq",
+    "population": 45000000,
+    "economyTier": 2
+  },
+  {
+    "id": "372",
+    "name": "Ireland",
+    "population": 5200000,
+    "economyTier": 5
+  },
+  {
+    "id": "376",
+    "name": "Israel",
+    "population": 9800000,
+    "economyTier": 5
+  },
+  {
+    "id": "380",
+    "name": "Italy",
+    "population": 59000000,
+    "economyTier": 4
+  },
+  {
+    "id": "384",
+    "name": "Côte d'Ivoire",
+    "population": 29000000,
+    "economyTier": 2
+  },
+  {
+    "id": "388",
+    "name": "Jamaica",
+    "population": 2800000,
+    "economyTier": 2
+  },
+  {
+    "id": "392",
+    "name": "Japan",
+    "population": 124000000,
+    "economyTier": 5
+  },
+  {
+    "id": "398",
+    "name": "Kazakhstan",
+    "population": 20000000,
+    "economyTier": 3
+  },
+  {
+    "id": "400",
+    "name": "Jordan",
+    "population": 11000000,
+    "economyTier": 2
+  },
+  {
+    "id": "404",
+    "name": "Kenya",
+    "population": 55000000,
+    "economyTier": 2
+  },
+  {
+    "id": "408",
+    "name": "North Korea",
+    "population": 26000000,
+    "economyTier": 1
+  },
+  {
+    "id": "410",
+    "name": "South Korea",
+    "population": 52000000,
+    "economyTier": 5
+  },
+  {
+    "id": "414",
+    "name": "Kuwait",
+    "population": 4300000,
+    "economyTier": 4
+  },
+  {
+    "id": "417",
+    "name": "Kyrgyzstan",
+    "population": 7000000,
+    "economyTier": 2
+  },
+  {
+    "id": "418",
+    "name": "Laos",
+    "population": 7600000,
+    "economyTier": 1
+  },
+  {
+    "id": "422",
+    "name": "Lebanon",
+    "population": 5400000,
+    "economyTier": 2
+  },
+  {
+    "id": "426",
+    "name": "Lesotho",
+    "population": 2300000,
+    "economyTier": 1
+  },
+  {
+    "id": "428",
+    "name": "Latvia",
+    "population": 1900000,
+    "economyTier": 4
+  },
+  {
+    "id": "430",
+    "name": "Liberia",
+    "population": 5400000,
+    "economyTier": 1
+  },
+  {
+    "id": "434",
+    "name": "Libya",
+    "population": 6900000,
+    "economyTier": 2
+  },
+  {
+    "id": "440",
+    "name": "Lithuania",
+    "population": 2800000,
+    "economyTier": 4
+  },
+  {
+    "id": "442",
+    "name": "Luxembourg",
+    "population": 660000,
+    "economyTier": 5
+  },
+  {
+    "id": "450",
+    "name": "Madagascar",
+    "population": 30000000,
+    "economyTier": 1
+  },
+  {
+    "id": "454",
+    "name": "Malawi",
+    "population": 21000000,
+    "economyTier": 1
+  },
+  {
+    "id": "458",
+    "name": "Malaysia",
+    "population": 34000000,
+    "economyTier": 3
+  },
+  {
+    "id": "466",
+    "name": "Mali",
+    "population": 23000000,
+    "economyTier": 1
+  },
+  {
+    "id": "478",
+    "name": "Mauritania",
+    "population": 4900000,
+    "economyTier": 1
+  },
+  {
+    "id": "484",
+    "name": "Mexico",
+    "population": 129000000,
+    "economyTier": 3
+  },
+  {
+    "id": "496",
+    "name": "Mongolia",
+    "population": 3400000,
+    "economyTier": 2
+  },
+  {
+    "id": "498",
+    "name": "Moldova",
+    "population": 2500000,
+    "economyTier": 2
+  },
+  {
+    "id": "499",
+    "name": "Montenegro",
+    "population": 620000,
+    "economyTier": 3
+  },
+  {
+    "id": "504",
+    "name": "Morocco",
+    "population": 37000000,
+    "economyTier": 2
+  },
+  {
+    "id": "508",
+    "name": "Mozambique",
+    "population": 33000000,
+    "economyTier": 1
+  },
+  {
+    "id": "512",
+    "name": "Oman",
+    "population": 4600000,
+    "economyTier": 4
+  },
+  {
+    "id": "516",
+    "name": "Namibia",
+    "population": 2600000,
+    "economyTier": 2
+  },
+  {
+    "id": "524",
+    "name": "Nepal",
+    "population": 31000000,
+    "economyTier": 1
+  },
+  {
+    "id": "528",
+    "name": "Netherlands",
+    "population": 17800000,
+    "economyTier": 5
+  },
+  {
+    "id": "540",
+    "name": "New Caledonia",
+    "population": 290000,
+    "economyTier": 3
+  },
+  {
+    "id": "548",
+    "name": "Vanuatu",
+    "population": 330000,
+    "economyTier": 1
+  },
+  {
+    "id": "554",
+    "name": "New Zealand",
+    "population": 5200000,
+    "economyTier": 5
+  },
+  {
+    "id": "558",
+    "name": "Nicaragua",
+    "population": 7000000,
+    "economyTier": 2
+  },
+  {
+    "id": "562",
+    "name": "Niger",
+    "population": 26000000,
+    "economyTier": 1
+  },
+  {
+    "id": "566",
+    "name": "Nigeria",
+    "population": 223000000,
+    "economyTier": 2
+  },
+  {
+    "id": "578",
+    "name": "Norway",
+    "population": 5500000,
+    "economyTier": 5
+  },
+  {
+    "id": "586",
+    "name": "Pakistan",
+    "population": 240000000,
+    "economyTier": 2
+  },
+  {
+    "id": "591",
+    "name": "Panama",
+    "population": 4400000,
+    "economyTier": 3
+  },
+  {
+    "id": "598",
+    "name": "Papua New Guinea",
+    "population": 10000000,
+    "economyTier": 1
+  },
+  {
+    "id": "600",
+    "name": "Paraguay",
+    "population": 6900000,
+    "economyTier": 2
+  },
+  {
+    "id": "604",
+    "name": "Peru",
+    "population": 34000000,
+    "economyTier": 3
+  },
+  {
+    "id": "608",
+    "name": "Philippines",
+    "population": 117000000,
+    "economyTier": 2
+  },
+  {
+    "id": "616",
+    "name": "Poland",
+    "population": 38000000,
+    "economyTier": 4
+  },
+  {
+    "id": "620",
+    "name": "Portugal",
+    "population": 10400000,
+    "economyTier": 4
+  },
+  {
+    "id": "624",
+    "name": "Guinea-Bissau",
+    "population": 2100000,
+    "economyTier": 1
+  },
+  {
+    "id": "626",
+    "name": "Timor-Leste",
+    "population": 1400000,
+    "economyTier": 1
+  },
+  {
+    "id": "630",
+    "name": "Puerto Rico",
+    "population": 3200000,
+    "economyTier": 4
+  },
+  {
+    "id": "634",
+    "name": "Qatar",
+    "population": 2700000,
+    "economyTier": 5
+  },
+  {
+    "id": "642",
+    "name": "Romania",
+    "population": 19000000,
+    "economyTier": 3
+  },
+  {
+    "id": "643",
+    "name": "Russia",
+    "population": 144000000,
+    "economyTier": 3
+  },
+  {
+    "id": "646",
+    "name": "Rwanda",
+    "population": 14000000,
+    "economyTier": 1
+  },
+  {
+    "id": "682",
+    "name": "Saudi Arabia",
+    "population": 36000000,
+    "economyTier": 4
+  },
+  {
+    "id": "686",
+    "name": "Senegal",
+    "population": 18000000,
+    "economyTier": 1
+  },
+  {
+    "id": "688",
+    "name": "Serbia",
+    "population": 6700000,
+    "economyTier": 3
+  },
+  {
+    "id": "694",
+    "name": "Sierra Leone",
+    "population": 8600000,
+    "economyTier": 1
+  },
+  {
+    "id": "703",
+    "name": "Slovakia",
+    "population": 5400000,
+    "economyTier": 4
+  },
+  {
+    "id": "704",
+    "name": "Vietnam",
+    "population": 99000000,
+    "economyTier": 3
+  },
+  {
+    "id": "705",
+    "name": "Slovenia",
+    "population": 2100000,
+    "economyTier": 4
+  },
+  {
+    "id": "706",
+    "name": "Somalia",
+    "population": 18000000,
+    "economyTier": 1
+  },
+  {
+    "id": "710",
+    "name": "South Africa",
+    "population": 60000000,
+    "economyTier": 3
+  },
+  {
+    "id": "716",
+    "name": "Zimbabwe",
+    "population": 16000000,
+    "economyTier": 1
+  },
+  {
+    "id": "724",
+    "name": "Spain",
+    "population": 48000000,
+    "economyTier": 4
+  },
+  {
+    "id": "728",
+    "name": "S. Sudan",
+    "population": 11000000,
+    "economyTier": 1
+  },
+  {
+    "id": "729",
+    "name": "Sudan",
+    "population": 48000000,
+    "economyTier": 1
+  },
+  {
+    "id": "732",
+    "name": "W. Sahara",
+    "population": 600000,
+    "economyTier": 1
+  },
+  {
+    "id": "740",
+    "name": "Suriname",
+    "population": 620000,
+    "economyTier": 2
+  },
+  {
+    "id": "748",
+    "name": "eSwatini",
+    "population": 1200000,
+    "economyTier": 2
+  },
+  {
+    "id": "752",
+    "name": "Sweden",
+    "population": 10500000,
+    "economyTier": 5
+  },
+  {
+    "id": "756",
+    "name": "Switzerland",
+    "population": 8800000,
+    "economyTier": 5
+  },
+  {
+    "id": "760",
+    "name": "Syria",
+    "population": 23000000,
+    "economyTier": 1
+  },
+  {
+    "id": "762",
+    "name": "Tajikistan",
+    "population": 10000000,
+    "economyTier": 1
+  },
+  {
+    "id": "764",
+    "name": "Thailand",
+    "population": 72000000,
+    "economyTier": 3
+  },
+  {
+    "id": "768",
+    "name": "Togo",
+    "population": 9000000,
+    "economyTier": 1
+  },
+  {
+    "id": "780",
+    "name": "Trinidad and Tobago",
+    "population": 1500000,
+    "economyTier": 3
+  },
+  {
+    "id": "784",
+    "name": "United Arab Emirates",
+    "population": 9500000,
+    "economyTier": 5
+  },
+  {
+    "id": "788",
+    "name": "Tunisia",
+    "population": 12000000,
+    "economyTier": 2
+  },
+  {
+    "id": "792",
+    "name": "Turkey",
+    "population": 85000000,
+    "economyTier": 3
+  },
+  {
+    "id": "795",
+    "name": "Turkmenistan",
+    "population": 6500000,
+    "economyTier": 2
+  },
+  {
+    "id": "800",
+    "name": "Uganda",
+    "population": 48000000,
+    "economyTier": 1
+  },
+  {
+    "id": "804",
+    "name": "Ukraine",
+    "population": 37000000,
+    "economyTier": 2
+  },
+  {
+    "id": "807",
+    "name": "Macedonia",
+    "population": 2100000,
+    "economyTier": 2
+  },
+  {
+    "id": "818",
+    "name": "Egypt",
+    "population": 112000000,
+    "economyTier": 2
+  },
+  {
+    "id": "826",
+    "name": "United Kingdom",
+    "population": 67000000,
+    "economyTier": 5
+  },
+  {
+    "id": "834",
+    "name": "Tanzania",
+    "population": 67000000,
+    "economyTier": 1
+  },
+  {
+    "id": "840",
+    "name": "United States of America",
+    "population": 335000000,
+    "economyTier": 5
+  },
+  {
+    "id": "854",
+    "name": "Burkina Faso",
+    "population": 23000000,
+    "economyTier": 1
+  },
+  {
+    "id": "858",
+    "name": "Uruguay",
+    "population": 3400000,
+    "economyTier": 4
+  },
+  {
+    "id": "860",
+    "name": "Uzbekistan",
+    "population": 35000000,
+    "economyTier": 2
+  },
+  {
+    "id": "862",
+    "name": "Venezuela",
+    "population": 28000000,
+    "economyTier": 2
+  },
+  {
+    "id": "887",
+    "name": "Yemen",
+    "population": 34000000,
+    "economyTier": 1
+  },
+  {
+    "id": "894",
+    "name": "Zambia",
+    "population": 20000000,
+    "economyTier": 1
+  },
+  {
+    "id": "900",
+    "name": "N. Cyprus",
+    "population": 380000,
+    "economyTier": 2
+  },
+  {
+    "id": "901",
+    "name": "Somaliland",
+    "population": 5700000,
+    "economyTier": 1
+  },
+  {
+    "id": "902",
+    "name": "Kosovo",
+    "population": 1800000,
+    "economyTier": 2
+  }
+]
