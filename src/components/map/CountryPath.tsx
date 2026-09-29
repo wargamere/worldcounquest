@@ -8,31 +8,34 @@ interface CountryPathProps {
   /** Path geometry. Computed once per viewport size and never changes after. */
   d: string;
   fill: string;
-  selected: boolean;
-  staging: boolean;
   onSelect: (id: CountryId) => void;
+  onHover: (id: CountryId | null) => void;
 }
 
 /**
- * One country outline.
+ * One country's fill.
  *
- * Memoised on purpose: there are 175 of these and a state change touches at most
- * a handful. Without this every troop movement re-renders the whole map. The `d`
- * string is referentially stable, so the comparison below is cheap.
+ * Memoised on purpose: there are 175 of these and a turn touches a handful.
+ * Selection, targets and danger are drawn as a separate overlay on top, so
+ * selecting a country changes no props here — only ownership changes do.
  */
-function CountryPathImpl({ id, d, fill, selected, staging, onSelect }: CountryPathProps) {
+function CountryPathImpl({ id, d, fill, onSelect, onHover }: CountryPathProps) {
   return (
     <path
+      data-country={id}
       d={d}
       fill={fill}
-      stroke={selected ? '#facc15' : staging ? '#38bdf8' : '#0f172a'}
-      strokeWidth={selected || staging ? 1.2 : 0.3}
+      stroke="#0b1120"
+      strokeOpacity={0.55}
+      strokeWidth={0.4}
       vectorEffect="non-scaling-stroke"
-      className="cursor-pointer outline-none transition-[fill] duration-200"
+      className="cursor-pointer transition-[fill] duration-300 hover:brightness-125"
       onClick={(event) => {
         event.stopPropagation();
         onSelect(id);
       }}
+      onMouseEnter={() => onHover(id)}
+      onMouseLeave={() => onHover(null)}
     />
   );
 }

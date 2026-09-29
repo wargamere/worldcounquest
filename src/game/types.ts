@@ -49,6 +49,13 @@ export interface Nation {
 
 export type LogKind = 'combat' | 'economy' | 'action' | 'system';
 
+export interface CombatRecord {
+  attackerId: NationId;
+  defenderId: NationId;
+  countryId: CountryId;
+  captured: boolean;
+}
+
 export interface LogEntry {
   id: number;
   turn: number;
@@ -56,6 +63,27 @@ export interface LogEntry {
   text: string;
   /** Nations involved, used to filter the log down to what the player cares about. */
   nationIds: NationId[];
+  /** Structured outcome for combat entries, so reports never parse the text. */
+  combat?: CombatRecord;
+}
+
+export interface PlayerStats {
+  battlesWon: number;
+  battlesLost: number;
+  defencesHeld: number;
+  countriesLost: number;
+  peakCountries: number;
+}
+
+/** What happened to the player while the AI nations took their turns. */
+export interface TurnReport {
+  /** The month that just ended. */
+  turn: number;
+  lost: { countryId: CountryId; name: string; byId: NationId }[];
+  /** Attacks on the player that failed. */
+  held: number;
+  income: number;
+  deserted: number;
 }
 
 /** countryId -> neighbouring countryIds, land and sea combined. Symmetric. */
@@ -73,6 +101,8 @@ export interface GameState {
   log: LogEntry[];
   nextLogId: number;
   rngState: number;
+  stats: PlayerStats;
+  lastReport: TurnReport | null;
 }
 
 export interface CombatResult {

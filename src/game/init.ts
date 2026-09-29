@@ -1,7 +1,7 @@
-import { ECONOMY, GARRISON, MANPOWER, TURN } from './balance';
+import { DIFFICULTY, ECONOMY, MANPOWER, TURN } from './balance';
 import { recomputeTiers } from './ai';
-import { nationColour } from './colours';
-import { countryIncome, manpowerRegen } from './economy';
+import { assignColours } from './colours';
+import { countryIncome, garrisonFor, manpowerRegen } from './economy';
 import { appendLog } from './log';
 import { seedFromString } from './rng';
 import type {
@@ -23,10 +23,6 @@ export interface NewGameOptions {
   randomSeed: string;
 }
 
-function openingGarrison(population: number): number {
-  return Math.round(GARRISON.BASE + Math.sqrt(population / 1_000_000) * GARRISON.PER_ROOT_MILLION);
-}
-
 /**
  * Builds a fresh world. Every country starts as its own independent nation —
  * there are no neutral territories, so conquest is continuous rather than gated
@@ -35,6 +31,11 @@ function openingGarrison(population: number): number {
 export function createGame(options: NewGameOptions): GameState {
   const countries: Record<CountryId, Country> = {};
   const nations: Record<string, Nation> = {};
+  const colours = assignColours(
+    options.seeds.map((s) => s.id),
+    options.adjacency,
+    options.playerCountryId,
+  );
 
   for (const seed of options.seeds) {
     if (!options.adjacency[seed.id]) continue;
@@ -45,14 +46,14 @@ export function createGame(options: NewGameOptions): GameState {
       population: seed.population,
       economyTier: seed.economyTier,
       ownerId: seed.id,
-      troops: openingGarrison(seed.population),
+      troops: garrisonFor(seed.population),
       development,
       hasMoved: false,
     };
     nations[seed.id] = {
       id: seed.id,
       name: seed.name,
-      colour: nationColour(seed.id, options.playerCountryId),
+      colour: colours[seed.id] ?? '#888888',
       treasury: 0,
       manpower: 0,
       isPlayer: seed.id === options.playerCountryId,
@@ -71,6 +72,8 @@ export function createGame(options: NewGameOptions): GameState {
     log: [],
     nextLogId: 1,
     rngState: seedFromString(options.randomSeed),
+    stats: { battlesWon: 0, battlesLost: 0, defencesHeld: 0, countriesLost: 0, peakCountries: 1 },
+    lastReport: null,
   };
 
   // Opening treasury and manpower are derived from what each nation actually holds.
@@ -78,9 +81,12 @@ export function createGame(options: NewGameOptions): GameState {
   for (const nation of Object.values(state.nations)) {
     const country = state.countries[nation.id];
     const gross = country ? countryIncome(country) : 0;
+    const months = nation.isPlayer
+      ? DIFFICULTY[options.difficulty].playerTreasuryMonths
+      : ECONOMY.STARTING_TREASURY_MONTHS;
     funded[nation.id] = {
       ...nation,
-      treasury: Math.round(gross * ECONOMY.STARTING_TREASURY_MONTHS),
+      treasury: Math.round(gross * months),
       manpower: Math.round(manpowerRegen(state, nation.id) * MANPOWER.STARTING_MONTHS),
     };
   }

@@ -1,4 +1,4 @@
-import { AI_BUDGET, DEVELOPMENT, MANPOWER, RECRUITMENT } from './balance';
+import { DEVELOPMENT, MANPOWER, RECRUITMENT } from './balance';
 import { areAdjacent } from './adjacency';
 import { describeCombat, resolveCombat } from './combat';
 import { investmentCost } from './economy';
@@ -12,6 +12,14 @@ export interface ActionOutcome {
 }
 
 const fail = (state: GameState, error: string): ActionOutcome => ({ state, error });
+
+/**
+ * Purchases are logged for the player only. Logging every AI recruitment filled
+ * the capped log within two turns and pushed the battles out of it.
+ */
+function logPlayerAction(state: GameState, nationId: NationId, text: string): GameState {
+  return nationId === state.playerId ? appendLog(state, 'action', text, [nationId]) : state;
+}
 
 /** Raises a country's development by one level. Cost scales with the current level. */
 export function invest(state: GameState, nationId: NationId, countryId: CountryId): ActionOutcome {
@@ -33,11 +41,10 @@ export function invest(state: GameState, nationId: NationId, countryId: CountryI
     nations: { ...state.nations, [nationId]: { ...nation, treasury: nation.treasury - cost } },
   };
   return {
-    state: appendLog(
+    state: logPlayerAction(
       next,
-      'action',
+      nationId,
       `${nation.name} developed ${country.name} to level ${country.development + 1} for ${cost}.`,
-      [nationId],
     ),
   };
 }
@@ -75,9 +82,7 @@ export function recruit(
     },
   };
   return {
-    state: appendLog(next, 'action', `${nation.name} recruited ${wanted} troops in ${country.name}.`, [
-      nationId,
-    ]),
+    state: logPlayerAction(next, nationId, `${nation.name} recruited ${wanted} troops in ${country.name}.`),
   };
 }
 
@@ -155,15 +160,32 @@ export function attack(
     : { ...target, troops: result.defenderSurvivors };
 
   const next = appendLog(
-    { ...state, countries, rngState },
+    { ...state, countries, rngState, stats: tallyBattle(state, nationId, defenderId, result.captured, countries) },
     'combat',
     describeCombat(attacker.name, target.name, input, result),
     [nationId, defenderId],
+    { attackerId: nationId, defenderId, countryId: targetId, captured: result.captured },
   );
   return { state: next };
 }
 
-/** Largest force a stack can commit without stripping the country bare. */
-export function defaultCommitment(troops: number): number {
-  return Math.max(1, Math.floor(troops * AI_BUDGET.COMMIT_SHARE));
+/** Updates the player's battle record if the player fought in this battle. */
+function tallyBattle(
+  state: GameState,
+  attackerId: NationId,
+  defenderId: NationId,
+  captured: boolean,
+  countries: GameState['countries'],
+): GameState['stats'] {
+  const stats = { ...state.stats };
+  if (attackerId === state.playerId) {
+    if (captured) stats.battlesWon += 1;
+    else stats.battlesLost += 1;
+    const owned = Object.values(countries).filter((c) => c.ownerId === state.playerId).length;
+    stats.peakCountries = Math.max(stats.peakCountries, owned);
+  } else if (defenderId === state.playerId) {
+    if (captured) stats.countriesLost += 1;
+    else stats.defencesHeld += 1;
+  }
+  return stats;
 }

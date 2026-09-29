@@ -48,16 +48,6 @@ export function areAdjacent(graph: AdjacencyGraph, a: CountryId, b: CountryId): 
   return graph[a]?.includes(b) ?? false;
 }
 
-/** Countries reachable from `id` that are NOT owned by `ownerId`. */
-export function hostileNeighbours(
-  graph: AdjacencyGraph,
-  countries: Record<CountryId, { ownerId: string }>,
-  id: CountryId,
-  ownerId: string,
-): CountryId[] {
-  return (graph[id] ?? []).filter((n) => countries[n] !== undefined && countries[n].ownerId !== ownerId);
-}
-
 /** Countries in the graph with no neighbours at all — these would be unplayable. */
 export function isolatedCountries(graph: AdjacencyGraph): CountryId[] {
   return Object.keys(graph).filter((id) => (graph[id] ?? []).length === 0);
