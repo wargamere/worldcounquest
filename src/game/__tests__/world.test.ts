@@ -7,6 +7,7 @@ import { isolatedCountries } from '@/game/adjacency';
 import { createGame } from '@/game/init';
 import { endTurn } from '@/game/turn';
 import { countryCount } from '@/game/victory';
+import type { Difficulty, GameState } from '@/game/types';
 
 const world = buildWorld(topology as unknown as CountriesTopology, seeds, seaLinks);
 
@@ -48,14 +49,24 @@ describe('the real world', () => {
 });
 
 describe('a full game', () => {
-  const newGame = (difficulty: 'relaxed' | 'standard' | 'ruthless' = 'standard') =>
-    createGame({
-      seeds,
-      adjacency: world.adjacency,
-      playerCountryId: '250',
-      difficulty,
-      randomSeed: 'test',
-    });
+  const newGame = (difficulty: Difficulty = 'standard', randomSeed = 'test') =>
+    createGame({ seeds, adjacency: world.adjacency, playerCountryId: '250', difficulty, randomSeed });
+
+  /**
+   * Advances the world `turns` months regardless of the player's fate.
+   *
+   * endTurn correctly does nothing once the game is over, so a test that simply
+   * loops endTurn silently stops measuring the moment the observer nation dies —
+   * which once made a live world look frozen. World-level tests go through here.
+   */
+  const simulate = (state: GameState, turns: number): GameState => {
+    let current = state;
+    for (let i = 0; i < turns; i += 1) current = endTurn({ ...current, status: 'playing' });
+    return current;
+  };
+
+  const ownership = (state: GameState) => Object.values(state.countries).map((c) => c.ownerId).join();
+  const nationCount = (state: GameState) => new Set(Object.values(state.countries).map((c) => c.ownerId)).size;
 
   it('starts with every country independent', () => {
     const state = newGame();
@@ -72,17 +83,20 @@ describe('a full game', () => {
     }
   });
 
+  it('gives the player a bigger war chest on easier difficulties', () => {
+    const treasury = (d: Difficulty) => newGame(d).nations['250']!.treasury;
+    expect(treasury('relaxed')).toBeGreaterThan(treasury('standard'));
+    expect(treasury('standard')).toBeGreaterThan(treasury('ruthless'));
+  });
+
   it('promotes roughly the intended number of major powers', () => {
-    const state = newGame();
-    const majors = Object.values(state.nations).filter((n) => n.isMajor);
+    const majors = Object.values(newGame().nations).filter((n) => n.isMajor);
     expect(majors.length).toBeGreaterThanOrEqual(20);
     expect(majors.length).toBeLessThan(60);
   });
 
-  it('runs two years without throwing and keeps the world consistent', () => {
-    let state = newGame();
-    for (let i = 0; i < 24; i += 1) state = endTurn(state);
-
+  it('keeps the world consistent over two years', () => {
+    const state = simulate(newGame(), 24);
     expect(state.turn).toBe(24);
     expect(Object.keys(state.countries)).toHaveLength(175);
     for (const country of Object.values(state.countries)) {
@@ -95,65 +109,57 @@ describe('a full game', () => {
     }
   });
 
-  it('is deterministic for a given seed', () => {
-    let a = newGame();
-    let b = newGame();
-    for (let i = 0; i < 12; i += 1) {
-      a = endTurn(a);
-      b = endTurn(b);
-    }
-    expect(a.countries).toEqual(b.countries);
+  it('stops advancing once the game is over', () => {
+    const over = { ...newGame(), status: 'lost' as const };
+    expect(endTurn(over)).toBe(over);
   });
 
-  it('actually fights — some borders move within two years', () => {
-    let state = newGame();
-    const before = Object.values(state.countries).map((c) => c.ownerId).join();
-    for (let i = 0; i < 24; i += 1) state = endTurn(state);
-    const after = Object.values(state.countries).map((c) => c.ownerId).join();
-    expect(after).not.toBe(before);
+  it('is deterministic for a given seed', () => {
+    expect(simulate(newGame(), 12).countries).toEqual(simulate(newGame(), 12).countries);
+  });
+
+  it('actually fights — borders move within the first year', () => {
+    const start = newGame();
+    expect(ownership(simulate(start, 12))).not.toBe(ownership(start));
+  });
+
+  it('writes combat lines with the numbers in them', () => {
+    const combat = simulate(newGame(), 24).log.filter((e) => e.kind === 'combat');
+    expect(combat.length).toBeGreaterThan(0);
+    expect(combat[0]?.text).toMatch(/A \d+\.\d/);
+  });
+
+  it('lets great powers keep their homelands through year one', () => {
+    // Regression guard. The AI once attacked with most of a stack and never
+    // checked what it left behind: the Netherlands owned Germany in month one and
+    // Belgium owned the United Kingdom in month two.
+    const greatPowers = ['276', '826', '380', '724', '643', '156', '840', '356', '392', '076'];
+    const state = simulate(newGame('standard', 'homelands'), 12);
+    const held = greatPowers.filter((id) => state.countries[id]?.ownerId === id);
+    expect(held.length).toBeGreaterThanOrEqual(7);
   });
 
   it('consolidates at a playable rate rather than collapsing in the first year', () => {
     for (const difficulty of ['relaxed', 'standard', 'ruthless'] as const) {
-      let state = newGame(difficulty);
-      for (let i = 0; i < 12; i += 1) state = endTurn(state);
-      const afterOneYear = new Set(Object.values(state.countries).map((c) => c.ownerId)).size;
-      expect(afterOneYear).toBeGreaterThan(60);
+      expect(nationCount(simulate(newGame(difficulty), 12)), difficulty).toBeGreaterThan(100);
     }
   });
 
   it('never deadlocks: the map keeps moving long after the opening', () => {
-    // Regression guard. Comparing raw troop counts instead of expected combat
-    // strength froze the world solid — every border sat at parity, no stack could
-    // clear the aggression threshold, and ownership stopped changing entirely.
+    // Regression guard for three separate freezes: comparing raw troop counts,
+    // reinforcing before attacking (which used up every source's action), and
+    // capping attacks at a size too small to hold what they took.
     for (const difficulty of ['relaxed', 'standard', 'ruthless'] as const) {
-      let state = newGame(difficulty);
-      for (let i = 0; i < 24; i += 1) state = endTurn(state);
-      const atTwoYears = Object.values(state.countries).map((c) => c.ownerId).join();
-
-      for (let i = 0; i < 36; i += 1) state = endTurn(state);
-      const atFiveYears = Object.values(state.countries).map((c) => c.ownerId).join();
-
-      expect(atFiveYears, `${difficulty} froze after two years`).not.toBe(atTwoYears);
+      const atTwoYears = simulate(newGame(difficulty), 24);
+      const atFiveYears = simulate(atTwoYears, 36);
+      expect(ownership(atFiveYears), `${difficulty} froze after two years`).not.toBe(ownership(atTwoYears));
+      expect(nationCount(atFiveYears), `${difficulty} barely moved`).toBeLessThan(nationCount(atTwoYears) - 5);
     }
   });
 
-  it('eventually produces large empires, so the game is winnable', () => {
-    let state = newGame('standard');
-    for (let i = 0; i < 120; i += 1) state = endTurn(state);
-    const biggest = Math.max(
-      ...Object.values(state.nations).map(
-        (n) => Object.values(state.countries).filter((c) => c.ownerId === n.id).length,
-      ),
-    );
-    expect(biggest).toBeGreaterThan(10);
-  });
-
-  it('writes combat lines with the numbers in them', () => {
-    let state = newGame();
-    for (let i = 0; i < 24; i += 1) state = endTurn(state);
-    const combat = state.log.filter((e) => e.kind === 'combat');
-    expect(combat.length).toBeGreaterThan(0);
-    expect(combat[0]?.text).toMatch(/A \d+\.\d/);
+  it('eventually produces large empires, so there is someone to beat', () => {
+    const state = simulate(newGame('standard'), 120);
+    const biggest = Math.max(...Object.keys(state.nations).map((id) => countryCount(state, id)));
+    expect(biggest).toBeGreaterThan(20);
   });
 });

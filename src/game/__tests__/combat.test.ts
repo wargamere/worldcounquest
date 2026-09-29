@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COMBAT } from '@/game/balance';
-import { describeCombat, resolveCombat } from '@/game/combat';
+import { captureProbability, describeCombat, expectedSurvivors, resolveCombat, troopsForChance } from '@/game/combat';
 
 const roll = (attackerTroops: number, defenderTroops: number, seed = 1) =>
   resolveCombat(
@@ -94,5 +94,70 @@ describe('resolveCombat', () => {
     expect(line).toContain('500');
     expect(line).toMatch(/A \d+\.\d/);
     expect(line).toMatch(/D \d+\.\d/);
+  });
+});
+
+describe('captureProbability', () => {
+  const base = { attackerDev: 5, defenderDev: 5 };
+
+  it('agrees with a brute-force simulation of the real combat function', () => {
+    for (const [attackerTroops, defenderTroops] of [[100, 100], [125, 100], [140, 100], [110, 100], [60, 40]] as const) {
+      const input = { ...base, attackerTroops, defenderTroops };
+      let wins = 0;
+      const trials = 20000;
+      let state = 12345;
+      for (let i = 0; i < trials; i += 1) {
+        const out = resolveCombat(input, state);
+        state = out.rngState;
+        if (out.result.captured) wins += 1;
+      }
+      expect(captureProbability(input)).toBeCloseTo(wins / trials, 1);
+    }
+  });
+
+  it('is 50% when expected strengths are exactly equal', () => {
+    const p = captureProbability({ ...base, attackerTroops: 125, defenderTroops: 100 });
+    expect(p).toBeCloseTo(0.5, 5);
+  });
+
+  it('is 0 when the defender cannot lose and 1 when the attacker cannot', () => {
+    expect(captureProbability({ ...base, attackerTroops: 10, defenderTroops: 100 })).toBe(0);
+    expect(captureProbability({ ...base, attackerTroops: 1000, defenderTroops: 10 })).toBe(1);
+  });
+
+  it('handles empty sides', () => {
+    expect(captureProbability({ ...base, attackerTroops: 0, defenderTroops: 10 })).toBe(0);
+    expect(captureProbability({ ...base, attackerTroops: 5, defenderTroops: 0 })).toBe(1);
+  });
+
+  it('rises monotonically with committed troops', () => {
+    let last = 0;
+    for (let n = 1; n <= 300; n += 1) {
+      const p = captureProbability({ ...base, attackerTroops: n, defenderTroops: 100 });
+      expect(p).toBeGreaterThanOrEqual(last);
+      last = p;
+    }
+  });
+});
+
+describe('troopsForChance', () => {
+  const base = { attackerDev: 5, defenderDev: 5, defenderTroops: 100 };
+
+  it('finds the smallest force that reaches the target', () => {
+    const n = troopsForChance(base, 1000, 0.9);
+    expect(n).not.toBeNull();
+    expect(captureProbability({ ...base, attackerTroops: n! })).toBeGreaterThanOrEqual(0.9);
+    expect(captureProbability({ ...base, attackerTroops: n! - 1 })).toBeLessThan(0.9);
+  });
+
+  it('returns null when even the whole stack falls short', () => {
+    expect(troopsForChance(base, 50, 0.9)).toBeNull();
+  });
+});
+
+describe('expectedSurvivors', () => {
+  it('is zero for an attack expected to fail and positive for one expected to win', () => {
+    expect(expectedSurvivors({ attackerTroops: 50, attackerDev: 5, defenderTroops: 100, defenderDev: 5 })).toBe(0);
+    expect(expectedSurvivors({ attackerTroops: 300, attackerDev: 5, defenderTroops: 100, defenderDev: 5 })).toBeGreaterThan(0);
   });
 });

@@ -42,6 +42,8 @@ function world(overrides: Partial<GameState> = {}): GameState {
     log: [],
     nextLogId: 1,
     rngState: 1,
+    stats: { battlesWon: 0, battlesLost: 0, defencesHeld: 0, countriesLost: 0, peakCountries: 1 },
+    lastReport: null,
     ...overrides,
   };
 }

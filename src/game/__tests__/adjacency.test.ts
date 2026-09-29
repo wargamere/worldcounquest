@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { areAdjacent, buildAdjacency, hostileNeighbours, isolatedCountries } from '@/game/adjacency';
+import { areAdjacent, buildAdjacency, isolatedCountries } from '@/game/adjacency';
 import type { SeaLink } from '@/game/types';
 
 const playable = (...ids: string[]) => new Set(ids);
@@ -53,17 +53,5 @@ describe('buildAdjacency', () => {
   it('reports islands with no links at all', () => {
     const graph = buildAdjacency([[], []], ['a', 'b'], [], playable('a', 'b'));
     expect(isolatedCountries(graph).sort()).toEqual(['a', 'b']);
-  });
-});
-
-describe('hostileNeighbours', () => {
-  it('returns only neighbours owned by someone else', () => {
-    const graph = { a: ['b', 'c'], b: ['a'], c: ['a'] };
-    const countries = {
-      a: { ownerId: 'me' },
-      b: { ownerId: 'me' },
-      c: { ownerId: 'them' },
-    };
-    expect(hostileNeighbours(graph, countries, 'a', 'me')).toEqual(['c']);
   });
 });

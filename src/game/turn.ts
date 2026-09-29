@@ -1,12 +1,12 @@
 import { DIFFICULTY } from './balance';
 import { recomputeTiers, takeAITurn } from './ai';
-import { applyIncome, countryIncome, grossIncome, ownedCountries } from './economy';
-import { appendLog } from './log';
-import { evaluateStatus } from './victory';
+import { applyIncome, ownedCountries } from './economy';
+import { appendLog, entriesSince } from './log';
+import { evaluateStatus, rivalHegemon } from './victory';
 import type { GameState, NationId } from './types';
 
 /** Income for the player only. Runs at the top of their turn, before they act. */
-export function startPlayerTurn(state: GameState): GameState {
+export function startPlayerTurn(state: GameState): { state: GameState; net: number; deserted: number } {
   const { state: paid, net, deserted } = applyIncome(state, state.playerId, 1);
   let next = { ...paid, countries: clearMoveFlags(paid) };
   if (deserted > 0) {
@@ -19,7 +19,7 @@ export function startPlayerTurn(state: GameState): GameState {
   } else {
     next = appendLog(next, 'economy', `Treasury received ${net.toFixed(0)}.`, [state.playerId]);
   }
-  return next;
+  return { state: next, net, deserted };
 }
 
 function clearMoveFlags(state: GameState): GameState['countries'] {
@@ -45,6 +45,7 @@ export function livingAINations(state: GameState): NationId[] {
 export function endTurn(state: GameState): GameState {
   if (state.status !== 'playing') return state;
 
+  const heldBefore = new Set(ownedCountries(state, state.playerId).map((c) => c.id));
   let current = recomputeTiers(state);
   const multiplier = DIFFICULTY[current.difficulty].incomeMultiplier;
 
@@ -54,6 +55,18 @@ export function endTurn(state: GameState): GameState {
     current = takeAITurn(current, nationId);
   }
 
+  const aiPhase = entriesSince(state, current);
+  const held = aiPhase.filter(
+    (e) => e.combat?.defenderId === state.playerId && !e.combat.captured,
+  ).length;
+  const lost = [...heldBefore]
+    .filter((id) => current.countries[id]?.ownerId !== state.playerId)
+    .map((id) => ({
+      countryId: id,
+      name: current.countries[id]?.name ?? id,
+      byId: current.countries[id]?.ownerId ?? '',
+    }));
+
   current = {
     ...current,
     turn: current.turn + 1,
@@ -61,16 +74,25 @@ export function endTurn(state: GameState): GameState {
   };
   current = { ...current, status: evaluateStatus(current) };
 
+  let income = 0;
+  let deserted = 0;
   if (current.status === 'won') {
     current = appendLog(current, 'system', 'Hegemony achieved.', [current.playerId]);
   } else if (current.status === 'lost') {
-    current = appendLog(current, 'system', 'Your last territory has fallen.', [current.playerId]);
+    const hegemon = rivalHegemon(current);
+    const text = hegemon
+      ? `${current.nations[hegemon]?.name ?? 'A rival'} has achieved hegemony over the world.`
+      : 'Your last territory has fallen.';
+    current = appendLog(current, 'system', text, [current.playerId, ...(hegemon ? [hegemon] : [])]);
   } else {
-    current = startPlayerTurn(current);
+    const started = startPlayerTurn(current);
+    current = started.state;
+    income = started.net;
+    deserted = started.deserted;
   }
 
-  return current;
+  return {
+    ...current,
+    lastReport: { turn: state.turn, lost, held, income, deserted },
+  };
 }
-
-/** Per-country income, for the side panel. */
-export { countryIncome, grossIncome };

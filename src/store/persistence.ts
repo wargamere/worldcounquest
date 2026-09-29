@@ -1,6 +1,12 @@
 import type { AdjacencyGraph, GameState } from '@/game/types';
 
-const KEY = 'hegemon.save.v1';
+/**
+ * Bumped whenever GameState changes shape. An older save is discarded rather
+ * than loaded half-understood.
+ */
+const VERSION = 2;
+const KEY = `hegemon.save.v${VERSION}`;
+const HELP_SEEN_KEY = 'hegemon.help-seen';
 
 /** The adjacency graph is derived from the map file, so it is never persisted. */
 type SavedGame = Omit<GameState, 'adjacency'>;
@@ -20,18 +26,10 @@ export function loadGame(adjacency: AdjacencyGraph): GameState | null {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as SavedGame;
-    if (!saved.countries || !saved.nations || !saved.playerId) return null;
+    if (!saved.countries || !saved.nations || !saved.playerId || !saved.stats) return null;
     return { ...saved, adjacency };
   } catch {
     return null;
-  }
-}
-
-export function hasSave(): boolean {
-  try {
-    return window.localStorage.getItem(KEY) !== null;
-  } catch {
-    return false;
   }
 }
 
@@ -40,5 +38,21 @@ export function clearSave(): void {
     window.localStorage.removeItem(KEY);
   } catch {
     // Nothing to do — see saveGame.
+  }
+}
+
+export function hasSeenHelp(): boolean {
+  try {
+    return window.localStorage.getItem(HELP_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function markHelpSeen(): void {
+  try {
+    window.localStorage.setItem(HELP_SEEN_KEY, '1');
+  } catch {
+    // A missing flag only means the help shows again next time.
   }
 }

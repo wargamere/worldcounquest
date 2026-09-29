@@ -1,4 +1,4 @@
-import { DEVELOPMENT, ECONOMY, MANPOWER, RECRUITMENT } from './balance';
+import { DEVELOPMENT, ECONOMY, GARRISON, MANPOWER, RECRUITMENT } from './balance';
 import type { Country, GameState, NationId } from './types';
 
 /** Gross income a single country produces per turn. */
@@ -104,4 +104,13 @@ export function applyIncome(
     net,
     deserted,
   };
+}
+
+/**
+ * A garrison proportionate to a country's size. Used for the opening garrison and
+ * as the floor minor nations recruit back up to, so Luxembourg holds a
+ * Luxembourg-sized force rather than the same flat number as Nigeria.
+ */
+export function garrisonFor(population: number): number {
+  return Math.round(GARRISON.BASE + Math.sqrt(population / 1_000_000) * GARRISON.PER_ROOT_MILLION);
 }

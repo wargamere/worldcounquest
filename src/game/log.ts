@@ -1,5 +1,5 @@
 import { LOG } from './balance';
-import type { GameState, LogEntry, LogKind, NationId } from './types';
+import type { CombatRecord, GameState, LogEntry, LogKind, NationId } from './types';
 
 /** Appends an entry, trimming the oldest once the cap is hit. Returns new state. */
 export function appendLog(
@@ -7,8 +7,16 @@ export function appendLog(
   kind: LogKind,
   text: string,
   nationIds: NationId[],
+  combat?: CombatRecord,
 ): GameState {
-  const entry: LogEntry = { id: state.nextLogId, turn: state.turn, kind, text, nationIds };
+  const entry: LogEntry = {
+    id: state.nextLogId,
+    turn: state.turn,
+    kind,
+    text,
+    nationIds,
+    ...(combat ? { combat } : {}),
+  };
   const log = [entry, ...state.log].slice(0, LOG.MAX_ENTRIES);
   return { ...state, log, nextLogId: state.nextLogId + 1 };
 }
@@ -46,4 +54,9 @@ export function formatTurn(turn: number, startYear: number, startMonth: number):
   const year = startYear + Math.floor(absolute / 12);
   const month = MONTHS[absolute % 12] ?? MONTHS[0];
   return `${month} ${year}`;
+}
+
+/** Entries appended between two states of the same game, newest first. */
+export function entriesSince(before: GameState, after: GameState): LogEntry[] {
+  return after.log.filter((entry) => entry.id >= before.nextLogId);
 }
