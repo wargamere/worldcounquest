@@ -1,5 +1,5 @@
-import { LOG } from './balance';
-import type { CombatRecord, GameState, LogEntry, LogKind, NationId } from './types';
+import { HISTORY, LOG } from './balance';
+import type { CombatRecord, GameState, HistoryPoint, LogEntry, LogKind, NationId } from './types';
 
 /** Appends an entry, trimming the oldest once the cap is hit. Returns new state. */
 export function appendLog(
@@ -59,4 +59,24 @@ export function formatTurn(turn: number, startYear: number, startMonth: number):
 /** Entries appended between two states of the same game, newest first. */
 export function entriesSince(before: GameState, after: GameState): LogEntry[] {
   return after.log.filter((entry) => entry.id >= before.nextLogId);
+}
+
+/**
+ * A snapshot of who holds how much, for the history chart: the player plus the
+ * TRACKED_NATIONS largest nations. Recording every nation every month would
+ * bloat saves for lines nobody could read.
+ */
+export function recordHistory(state: GameState): HistoryPoint {
+  const counts = new Map<NationId, number>();
+  for (const country of Object.values(state.countries)) {
+    counts.set(country.ownerId, (counts.get(country.ownerId) ?? 0) + 1);
+  }
+  const top = [...counts.entries()]
+    .filter(([id]) => id !== state.playerId)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, HISTORY.TRACKED_NATIONS);
+  return {
+    turn: state.turn,
+    counts: Object.fromEntries([[state.playerId, counts.get(state.playerId) ?? 0], ...top]),
+  };
 }

@@ -8,9 +8,10 @@ import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from 'd3-zoom
 import { mesh } from 'topojson-client';
 import { ADVISOR } from '@/game/balance';
 import { UNCLAIMED_COLOUR } from '@/game/colours';
-import { countryRisk } from '@/game/orders';
+import { attackPresets, countryRisk, previewAttack } from '@/game/orders';
 import type { CountryId, GameState } from '@/game/types';
 import { nationBorders, type World } from '@/lib/world';
+import { pct } from '../ui/format';
 import type { FocusRequest } from '@/store/gameStore';
 import { CountryPath } from './CountryPath';
 
@@ -19,6 +20,8 @@ interface WorldMapProps {
   game: GameState;
   selectedId: CountryId | null;
   targetId: CountryId | null;
+  /** Countries ticked to join the attack being set up. */
+  joiningIds: CountryId[];
   focus: FocusRequest | null;
   onCountryClick: (id: CountryId) => void;
   onBackgroundClick: () => void;
@@ -35,7 +38,7 @@ const FOCUS_MAX_ZOOM = 6;
 const OCEAN = '#0b1120';
 
 export function WorldMap(props: WorldMapProps) {
-  const { world, game, selectedId, targetId, focus, onCountryClick, onBackgroundClick, onHome } = props;
+  const { world, game, selectedId, targetId, joiningIds, focus, onCountryClick, onBackgroundClick, onHome } = props;
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const behaviourRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
@@ -225,6 +228,13 @@ export function WorldMap(props: WorldMapProps) {
 
   const hovered = hoverId ? game.countries[hoverId] : undefined;
   const hoveredOwner = hovered ? game.nations[hovered.ownerId] : undefined;
+  /** Odds from the selected country, when the hovered one is a target it can attack. */
+  const hoverOdds = (() => {
+    if (!hovered || !selected || !attackTargets.includes(hovered.id)) return null;
+    const troops = attackPresets(game, selected.id, hovered.id).recommended;
+    const chance = previewAttack(game, selected.id, hovered.id, troops)?.winChance;
+    return chance === undefined ? null : { troops, chance };
+  })();
 
   const outline = (ids: CountryId[], stroke: string, width: number, dash?: string) =>
     ids.map((id) => {
@@ -279,6 +289,7 @@ export function WorldMap(props: WorldMapProps) {
           {outline(moveTargets, '#7dd3fc', 1.4, '4 3')}
           {outline(attackTargets, '#fb7185', 1.6, '4 3')}
           {outline(endangered, '#ef4444', 2)}
+          {outline(joiningIds, '#e2e8f0', 2, '2 2')}
           {selectedId && outline([selectedId], '#ffffff', 2.4)}
           {targetId && outline([targetId], targetId && game.countries[targetId]?.ownerId === game.playerId ? '#38bdf8' : '#f43f5e', 3)}
 
@@ -325,6 +336,11 @@ export function WorldMap(props: WorldMapProps) {
             <div className="mt-0.5 tabular-nums text-slate-300">
               {hovered.troops} troops · dev {hovered.development}
             </div>
+            {hoverOdds && selected && (
+              <div className="mt-1 border-t border-slate-800 pt-1 tabular-nums text-rose-200">
+                From {selected.name}: {pct(hoverOdds.chance)} with {hoverOdds.troops}
+              </div>
+            )}
           </>
         )}
       </div>

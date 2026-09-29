@@ -49,6 +49,14 @@ function useShortcuts(active: boolean) {
         case 'H':
           store.focusHome();
           break;
+        case 'n':
+        case 'N':
+          store.selectNextReady();
+          break;
+        case 'z':
+        case 'Z':
+          store.undo();
+          break;
         case '?':
           store.setHelp(true);
           break;
@@ -96,6 +104,8 @@ export default function Home() {
         game={game}
         onEndTurn={store.endTurn}
         onAdvise={store.advise}
+        onNext={store.selectNextReady}
+        onUndo={store.undoStack.length > 0 ? store.undo : null}
         onHelp={() => store.setHelp(true)}
         onQuit={store.abandonGame}
       />
@@ -107,6 +117,7 @@ export default function Home() {
             game={game}
             selectedId={selectedId}
             targetId={targetId}
+            joiningIds={store.joiningIds}
             focus={store.focus}
             onCountryClick={store.clickCountry}
             onBackgroundClick={store.back}
@@ -139,6 +150,7 @@ export default function Home() {
                 countryId={selectedId}
                 targetId={targetId}
                 suggestedTroops={store.suggestedTroops}
+                suggestedSupport={store.suggestedSupport}
                 flash={store.flash}
                 onInvest={store.doInvest}
                 onRecruit={store.doRecruit}
@@ -146,6 +158,7 @@ export default function Home() {
                 onMove={store.doMove}
                 onOrder={store.setOrder}
                 onCancelOrder={store.back}
+                onJoiningChange={store.setJoining}
                 onShowNation={store.focusNation}
                 onClose={store.deselect}
               />

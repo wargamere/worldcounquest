@@ -3,10 +3,11 @@
 import { create } from 'zustand';
 import seedData from '@/data/countries.seed.json';
 import seaLinkData from '@/data/sea-links.json';
-import { attack, invest, moveTroops, recruit } from '@/game/actions';
+import { assault, attack, invest, moveTroops, recruit, type Contribution } from '@/game/actions';
 import { areAdjacent } from '@/game/adjacency';
 import { adviseAttack, adviseMove } from '@/game/ai';
 import { entriesSince } from '@/game/log';
+import { combinedThreat } from '@/game/threat';
 import { createGame } from '@/game/init';
 import { endTurn as runEndTurn } from '@/game/turn';
 import type { CountryId, CountrySeed, Difficulty, GameState, NationId, SeaLink } from '@/game/types';
@@ -42,6 +43,15 @@ interface GameStore {
   targetId: CountryId | null;
   /** Troops the advisor proposed for the current order, if it proposed one. */
   suggestedTroops: number | null;
+  /** Other countries proposed to join the current attack. */
+  suggestedSupport: Contribution[] | null;
+  /** Countries currently ticked to join the attack being set up, for the map. */
+  joiningIds: CountryId[];
+  /**
+   * Game states before each recruit, investment or move this turn. Attacks clear
+   * it: undoing a lost battle and trying again would let a player reroll the dice.
+   */
+  undoStack: GameState[];
 
   flash: Flash | null;
   showReport: boolean;
@@ -56,13 +66,16 @@ interface GameStore {
   clickCountry: (id: CountryId) => void;
   selectCountry: (id: CountryId) => void;
   deselect: () => void;
-  setOrder: (sourceId: CountryId, targetId: CountryId) => void;
+  setOrder: (sourceId: CountryId, targetId: CountryId, troops?: number, support?: Contribution[]) => void;
   back: () => void;
+  setJoining: (ids: CountryId[]) => void;
+  selectNextReady: () => void;
+  undo: () => void;
 
   doInvest: (countryId: CountryId) => void;
   doRecruit: (countryId: CountryId, troops: number) => void;
   doMove: (troops: number) => void;
-  doAttack: (troops: number) => void;
+  doAttack: (troops: number, support: Contribution[]) => void;
   advise: () => void;
   endTurn: () => void;
 
@@ -72,6 +85,9 @@ interface GameStore {
   dismissReport: () => void;
   setHelp: (open: boolean) => void;
 }
+
+/** How many reversible actions can be undone within one turn. */
+const UNDO_LIMIT = 50;
 
 let focusNonce = 0;
 const focusOn = (countryIds: CountryId[]): FocusRequest => ({ countryIds, nonce: (focusNonce += 1) });
@@ -85,6 +101,11 @@ export const useGameStore = create<GameStore>((set, get) => {
     set({ game, ...extra });
   };
 
+  /** Commits a recruit, investment or move, remembering the state before it. */
+  const commitReversible = (before: GameState, game: GameState, extra: Partial<GameStore> = {}): void => {
+    commit(game, { ...extra, undoStack: [...get().undoStack, before].slice(-UNDO_LIMIT) });
+  };
+
   return {
     phase: 'loading',
     world: null,
@@ -94,6 +115,9 @@ export const useGameStore = create<GameStore>((set, get) => {
     selectedId: null,
     targetId: null,
     suggestedTroops: null,
+    suggestedSupport: null,
+    joiningIds: [],
+    undoStack: [],
     flash: null,
     showReport: false,
     showHelp: false,
@@ -123,10 +147,12 @@ export const useGameStore = create<GameStore>((set, get) => {
         randomSeed: `${playerCountryId}-${difficulty}-${Date.now()}`,
       });
       commit(game, {
+        undoStack: [],
         phase: 'playing',
         selectedId: playerCountryId,
         targetId: null,
         suggestedTroops: null,
+        suggestedSupport: null,
         flash: null,
         showReport: false,
         showHelp: !hasSeenHelp(),
@@ -145,10 +171,12 @@ export const useGameStore = create<GameStore>((set, get) => {
       }
       set({
         game,
+        undoStack: [],
         phase: 'playing',
         selectedId: null,
         targetId: null,
         suggestedTroops: null,
+        suggestedSupport: null,
         flash: null,
         showReport: false,
         focus: focusOn(ownedBy(game, game.playerId)),
@@ -159,10 +187,12 @@ export const useGameStore = create<GameStore>((set, get) => {
       clearSave();
       set({
         game: null,
+        undoStack: [],
         phase: 'menu',
         selectedId: null,
         targetId: null,
         suggestedTroops: null,
+        suggestedSupport: null,
         flash: null,
         showReport: false,
         hasSavedGame: false,
@@ -185,23 +215,75 @@ export const useGameStore = create<GameStore>((set, get) => {
         !source.hasMoved &&
         areAdjacent(game.adjacency, source.id, id)
       ) {
-        set({ targetId: id, suggestedTroops: null, flash: null });
+        set({ targetId: id, suggestedTroops: null, suggestedSupport: null, flash: null });
         return;
       }
-      set({ selectedId: id, targetId: null, suggestedTroops: null, flash: null });
+      set({ selectedId: id, targetId: null, suggestedTroops: null, suggestedSupport: null, flash: null });
     },
 
-    selectCountry: (id) => set({ selectedId: id, targetId: null, suggestedTroops: null, flash: null }),
+    selectCountry: (id) => set({ selectedId: id, targetId: null, suggestedTroops: null, suggestedSupport: null, flash: null }),
 
-    deselect: () => set({ selectedId: null, targetId: null, suggestedTroops: null, flash: null }),
+    deselect: () => set({ selectedId: null, targetId: null, suggestedTroops: null, suggestedSupport: null, flash: null }),
 
-    setOrder: (sourceId, targetId) =>
-      set({ selectedId: sourceId, targetId, suggestedTroops: null, flash: null }),
+    setOrder: (sourceId, targetId, troops, support) =>
+      set({
+        selectedId: sourceId,
+        targetId,
+        suggestedTroops: troops ?? null,
+        suggestedSupport: support ?? null,
+        flash: null,
+      }),
+
+    setJoining: (ids) => {
+      const current = get().joiningIds;
+      if (current.length !== ids.length || current.some((id, i) => id !== ids[i])) set({ joiningIds: ids });
+    },
+
+    /**
+     * Selects the next of your countries that can still act, cycling through them
+     * in order of how likely each is to fall, so the urgent ones come first.
+     */
+    selectNextReady: () => {
+      const { game, selectedId } = get();
+      if (!game) return;
+      const ready = Object.values(game.countries)
+        .filter((c) => c.ownerId === game.playerId && !c.hasMoved && c.troops > 1)
+        .map((c) => ({ id: c.id, risk: combinedThreat(game, c.id) }))
+        .sort((a, b) => b.risk - a.risk || a.id.localeCompare(b.id))
+        .map((c) => c.id);
+      if (ready.length === 0) {
+        set({ flash: { tone: 'info', text: 'Every garrison has acted this turn. End the turn to go again.' } });
+        return;
+      }
+      const at = selectedId ? ready.indexOf(selectedId) : -1;
+      const next = ready[(at + 1) % ready.length] ?? ready[0]!;
+      set({
+        selectedId: next,
+        targetId: null,
+        suggestedTroops: null,
+        suggestedSupport: null,
+        flash: null,
+        focus: focusOn([next]),
+      });
+    },
+
+    undo: () => {
+      const stack = get().undoStack;
+      const previous = stack[stack.length - 1];
+      if (!previous) return;
+      commit(previous, {
+        undoStack: stack.slice(0, -1),
+        targetId: null,
+        suggestedTroops: null,
+        suggestedSupport: null,
+        flash: { tone: 'info', text: 'Undone.' },
+      });
+    },
 
     /** Escape: drop the target first, then the selection. */
     back: () => {
       const { targetId, selectedId } = get();
-      if (targetId) set({ targetId: null, suggestedTroops: null });
+      if (targetId) set({ targetId: null, suggestedTroops: null, suggestedSupport: null });
       else if (selectedId) set({ selectedId: null, flash: null });
     },
 
@@ -210,7 +292,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!game) return;
       const outcome = invest(game, game.playerId, countryId);
       if (outcome.error) set({ flash: { tone: 'bad', text: outcome.error } });
-      else commit(outcome.state, { flash: null });
+      else commitReversible(game, outcome.state, { flash: null });
     },
 
     doRecruit: (countryId, troops) => {
@@ -218,7 +300,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!game) return;
       const outcome = recruit(game, game.playerId, countryId, troops);
       if (outcome.error) set({ flash: { tone: 'bad', text: outcome.error } });
-      else commit(outcome.state, { flash: { tone: 'info', text: `Recruited ${Math.floor(troops)} troops.` } });
+      else commitReversible(game, outcome.state, { flash: { tone: 'info', text: `Recruited ${Math.floor(troops)} troops.` } });
     },
 
     doMove: (troops) => {
@@ -229,18 +311,22 @@ export const useGameStore = create<GameStore>((set, get) => {
         set({ flash: { tone: 'bad', text: outcome.error } });
         return;
       }
-      commit(outcome.state, {
+      commitReversible(game, outcome.state, {
         selectedId: targetId,
         targetId: null,
         suggestedTroops: null,
+        suggestedSupport: null,
         flash: { tone: 'info', text: `Moved ${Math.floor(troops)} troops.` },
       });
     },
 
-    doAttack: (troops) => {
+    doAttack: (troops, support) => {
       const { game, selectedId, targetId } = get();
       if (!game || !selectedId || !targetId) return;
-      const outcome = attack(game, game.playerId, selectedId, targetId, troops);
+      const outcome =
+        support.length === 0
+          ? attack(game, game.playerId, selectedId, targetId, troops)
+          : assault(game, game.playerId, targetId, [{ fromId: selectedId, troops }, ...support]);
       if (outcome.error) {
         set({ flash: { tone: 'bad', text: outcome.error } });
         return;
@@ -249,9 +335,11 @@ export const useGameStore = create<GameStore>((set, get) => {
       const target = outcome.state.countries[targetId];
       const won = entry?.combat?.captured ?? false;
       commit(outcome.state, {
+        undoStack: [],
         selectedId: won ? targetId : selectedId,
         targetId: null,
         suggestedTroops: null,
+        suggestedSupport: null,
         flash: won
           ? { tone: 'good', text: `${target?.name ?? 'Territory'} captured — ${target?.troops ?? 0} troops hold it.` }
           : { tone: 'bad', text: `The attack on ${target?.name ?? 'the territory'} failed.` },
@@ -268,8 +356,9 @@ export const useGameStore = create<GameStore>((set, get) => {
           selectedId: plan.fromId,
           targetId: plan.targetId,
           suggestedTroops: plan.troops,
+          suggestedSupport: plan.support,
           flash: null,
-          focus: focusOn([plan.fromId, plan.targetId]),
+          focus: focusOn([plan.fromId, plan.targetId, ...plan.support.map((p) => p.fromId)]),
         });
         return;
       }
@@ -279,6 +368,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           selectedId: move.fromId,
           targetId: move.toId,
           suggestedTroops: move.troops,
+          suggestedSupport: null,
           flash: {
             tone: 'info',
             text:
@@ -309,8 +399,10 @@ export const useGameStore = create<GameStore>((set, get) => {
       const eventful = report !== null && (report.lost.length > 0 || report.held > 0 || report.deserted > 0);
       const selected = get().selectedId;
       commit(next, {
+        undoStack: [],
         targetId: null,
         suggestedTroops: null,
+        suggestedSupport: null,
         flash: null,
         showReport: eventful,
         // Keep your selection only if it is still yours.

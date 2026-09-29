@@ -2,7 +2,7 @@ import { DIFFICULTY, ECONOMY, MANPOWER, TURN } from './balance';
 import { recomputeTiers } from './ai';
 import { assignColours } from './colours';
 import { countryIncome, garrisonFor, manpowerRegen } from './economy';
-import { appendLog } from './log';
+import { appendLog, recordHistory } from './log';
 import { seedFromString } from './rng';
 import type {
   AdjacencyGraph,
@@ -74,6 +74,7 @@ export function createGame(options: NewGameOptions): GameState {
     rngState: seedFromString(options.randomSeed),
     stats: { battlesWon: 0, battlesLost: 0, defencesHeld: 0, countriesLost: 0, peakCountries: 1 },
     lastReport: null,
+    history: [],
   };
 
   // Opening treasury and manpower are derived from what each nation actually holds.
@@ -91,6 +92,7 @@ export function createGame(options: NewGameOptions): GameState {
     };
   }
   state = recomputeTiers({ ...state, nations: funded });
+  state = { ...state, history: [recordHistory(state)] };
 
   const player = state.nations[options.playerCountryId];
   return appendLog(

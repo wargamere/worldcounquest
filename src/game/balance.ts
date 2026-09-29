@@ -140,9 +140,9 @@ export const AI_TIERS = {
  *   several years of recruiting before the first safe attack.
  */
 export const DIFFICULTY = {
-  relaxed: { winChance: 0.85, riskTolerance: 0.1, attacksPerTurn: 1, incomeMultiplier: 0.7, investThreshold: 400, playerTreasuryMonths: 8 },
-  standard: { winChance: 0.75, riskTolerance: 0.15, attacksPerTurn: 2, incomeMultiplier: 0.8, investThreshold: 300, playerTreasuryMonths: 6 },
-  ruthless: { winChance: 0.65, riskTolerance: 0.25, attacksPerTurn: 3, incomeMultiplier: 1.15, investThreshold: 200, playerTreasuryMonths: 3 },
+  relaxed: { winChance: 0.85, riskTolerance: 0.1, attacksPerTurn: 2, incomeMultiplier: 0.8, investThreshold: 400, playerTreasuryMonths: 8 },
+  standard: { winChance: 0.75, riskTolerance: 0.15, attacksPerTurn: 5, incomeMultiplier: 1.0, investThreshold: 300, playerTreasuryMonths: 6 },
+  ruthless: { winChance: 0.65, riskTolerance: 0.25, attacksPerTurn: 10, incomeMultiplier: 1.25, investThreshold: 200, playerTreasuryMonths: 3 },
 } as const;
 
 export const AI_BUDGET = {
@@ -191,6 +191,11 @@ export const ADVISOR = {
   DANGER_THRESHOLD: 0.35,
   /** Smallest troop movement the advisor bothers to suggest. */
   MIN_MOVE: 5,
+} as const;
+
+export const HISTORY = {
+  /** Nations recorded each month besides the player: enough to chart the leaders. */
+  TRACKED_NATIONS: 10,
 } as const;
 
 export const LOG = {

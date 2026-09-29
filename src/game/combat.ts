@@ -66,13 +66,15 @@ export function describeCombat(
   defenderName: string,
   input: CombatInput,
   result: CombatResult,
+  sources = 1,
 ): string {
   const a = result.attackPower.toFixed(1);
   const d = result.defencePower.toFixed(1);
+  const force = sources > 1 ? `${input.attackerTroops} troops from ${sources} countries` : `${input.attackerTroops} troops`;
   if (result.captured) {
-    return `${attackerName} took ${defenderName}: ${input.attackerTroops} troops (A ${a}) beat ${input.defenderTroops} (D ${d}); ${result.attackerSurvivors} survived.`;
+    return `${attackerName} took ${defenderName}: ${force} (A ${a}) beat ${input.defenderTroops} (D ${d}); ${result.attackerSurvivors} survived.`;
   }
-  return `${attackerName} failed against ${defenderName}: ${input.attackerTroops} troops (A ${a}) lost to ${input.defenderTroops} (D ${d}); defender left with ${result.defenderSurvivors}.`;
+  return `${attackerName} failed against ${defenderName}: ${force} (A ${a}) lost to ${input.defenderTroops} (D ${d}); defender left with ${result.defenderSurvivors}.`;
 }
 
 /** Deterministic strength before the dice: troops scaled by development. */
