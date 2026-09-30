@@ -6,14 +6,18 @@
  * Inputs, downloaded once into .cache/natural-earth at a pinned commit:
  *   - 10m admin-1 states and provinces (4,596 units across 251 countries)
  *   - 10m populated places (7,342 cities with population and capital flags)
- * plus world-atlas countries-110m for the 175 playable countries and
- * src/data/countries.seed.json / sea-links.json.
+ *   - 10m geography regions (mountain ranges, deserts, plateaus, foothills, tundra)
+ * plus world-atlas countries-110m for the 175 playable countries,
+ * src/data/countries.seed.json / sea-links.json, and the authored
+ * src/data/terrain-overrides.json / good-overrides.json.
  *
- * Outputs, both committed:
+ * Outputs, all committed:
  *   - public/provinces.json — simplified TopoJSON, one geometry per province,
  *     keyed by province id, for rendering.
- *   - src/data/provinces.json — per-province facts the game reads: country,
- *     name, population, largest city, capital flag, neighbours (land and sea).
+ *   - src/data/provinces.json — per-province facts the turn-based game reads:
+ *     country, name, population, largest city, capital flag, neighbours (land and sea).
+ *   - public/province-facts.json — the real-time game's facts (format 2): the
+ *     same, plus anchors, edge lengths, sea flags, terrain and goods.
  *
  * Admin-1 units are wildly uneven (the UK has 232, Slovenia 193, Brazil 27),
  * so each country's units are merged greedily — smallest into its smallest
@@ -29,6 +33,8 @@ import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from
 import mapshaper from 'mapshaper';
 import { feature, neighbors } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
+import { MAP } from '../src/next/game/balance';
+import type { Good, GoodOverride, ProvinceFact, ProvinceFacts, Terrain, TerrainOverride } from '../src/next/game/types';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = join(ROOT, '.cache', 'natural-earth');
@@ -37,6 +43,7 @@ const NATURAL_EARTH_COMMIT = 'ca96624a56bd078437bca8184e78163e5039ad19';
 const SOURCES = {
   admin1: 'geojson/ne_10m_admin_1_states_provinces.geojson',
   places: 'geojson/ne_10m_populated_places_simple.geojson',
+  regions: 'geojson/ne_10m_geography_regions_polys.geojson',
 } as const;
 
 /** Provinces per country = round(sqrt(area km²) / AREA_DIVISOR), at least 1. */
@@ -545,3 +552,298 @@ writeFileSync(join(ROOT, 'src', 'data', 'provinces.json'), `${lines.join('\n')}\
 const counts = [...byCountry.entries()].map(([id, list]) => `${seedById.get(id)?.name ?? id} ${list.length}`);
 console.log(`${records.length} provinces in ${byCountry.size} countries, ${seaLinks.length} sea links`);
 console.log(counts.sort().join(', '));
+
+// --- 8. Real-time facts: anchors, edge lengths, terrain, goods (pipeline v2) ---
+
+const RAD = Math.PI / 180;
+type RegionClass = 'Range/mtn' | 'Desert' | 'Plateau' | 'Foothills' | 'Tundra';
+const REGION_CLASSES: ReadonlySet<string> = new Set<RegionClass>(['Range/mtn', 'Desert', 'Plateau', 'Foothills', 'Tundra']);
+
+/** A polygon set in plain lon/lat, for fast point tests. */
+interface Shape {
+  rings: Position[][];
+  bbox: [number, number, number, number];
+}
+
+function toShape(geometry: Area): Shape {
+  const rings = geometry.type === 'Polygon' ? geometry.coordinates : geometry.coordinates.flat();
+  const bbox: [number, number, number, number] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const ring of rings) {
+    for (const [x = 0, y = 0] of ring) {
+      bbox[0] = Math.min(bbox[0], x);
+      bbox[1] = Math.min(bbox[1], y);
+      bbox[2] = Math.max(bbox[2], x);
+      bbox[3] = Math.max(bbox[3], y);
+    }
+  }
+  return { rings, bbox };
+}
+
+/**
+ * Even-odd rule over every ring, so holes and multipolygons need no special
+ * case. Planar in lon/lat, which is how the world test re-checks anchors
+ * against public/provinces.json without a geo library.
+ */
+function insidePlanar(shape: Shape, x: number, y: number): boolean {
+  const [x0, y0, x1, y1] = shape.bbox;
+  if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+  let inside = false;
+  for (const ring of shape.rings) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+      const [xi = 0, yi = 0] = ring[i] ?? [];
+      const [xj = 0, yj = 0] = ring[j] ?? [];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+/** Distance to the nearest ring edge, in degrees of latitude (longitude scaled by cos lat). */
+function boundaryDistance(shape: Shape, x: number, y: number): number {
+  const k = Math.cos(y * RAD);
+  let best = Infinity;
+  for (const ring of shape.rings) {
+    for (let i = 1; i < ring.length; i += 1) {
+      const [ax = 0, ay = 0] = ring[i - 1] ?? [];
+      const [bx = 0, by = 0] = ring[i] ?? [];
+      const dx = (bx - ax) * k;
+      const dy = by - ay;
+      const px = (x - ax) * k;
+      const py = y - ay;
+      const len = dx * dx + dy * dy;
+      const t = len > 0 ? Math.max(0, Math.min(1, (px * dx + py * dy) / len)) : 0;
+      best = Math.min(best, Math.hypot(px - t * dx, py - t * dy));
+    }
+  }
+  return best;
+}
+
+function largestPolygon(geometry: Area): Polygon {
+  if (geometry.type === 'Polygon') return geometry;
+  let best: Polygon = { type: 'Polygon', coordinates: geometry.coordinates[0] ?? [] };
+  let bestArea = -1;
+  for (const coordinates of geometry.coordinates) {
+    const polygon: Polygon = { type: 'Polygon', coordinates };
+    const area = geoArea(polygon);
+    if (area > bestArea) {
+      best = polygon;
+      bestArea = area;
+    }
+  }
+  return best;
+}
+
+const round = (value: number, decimals: number): number => {
+  const k = 10 ** decimals;
+  return Math.round(value * k) / k;
+};
+
+/** 32-bit FNV-1a over UTF-16 code units: the hills coin flip and the map version. */
+function fnv1a(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+// Anchors are chosen against the rendered (simplified) outline, because that is
+// where the player sees armies stand, and it is what the world test can check.
+const renderShapes = new Map(
+  renderFeatures.map((f) => [String(f.properties['province']), { f, shape: toShape(f.geometry) }]),
+);
+const anchorRules = { city: 0, centroid: 0, grid: 0 };
+
+function chooseAnchor(r: ProvinceRecord): [number, number] {
+  const render = renderShapes.get(r.id);
+  if (!render) throw new Error(`no rendered shape for ${r.id}`);
+  const within = (p: [number, number]): boolean => geoContains(render.f, p) && insidePlanar(render.shape, p[0], p[1]);
+  if (r.city && within([r.city.lon, r.city.lat])) {
+    anchorRules.city += 1;
+    return [r.city.lon, r.city.lat];
+  }
+  const main = largestPolygon(render.f.geometry);
+  const centre = geoCentroid(main);
+  const centroid: [number, number] = [round(centre[0], 4), round(centre[1], 4)];
+  if (within(centroid)) {
+    anchorRules.centroid += 1;
+    return centroid;
+  }
+  // The pole of inaccessibility on a 16x16 grid, refined only if a sliver defeats it.
+  const [x0, y0, x1, y1] = toShape(main).bbox;
+  for (let cells = 16; cells <= 256; cells *= 2) {
+    let best: { p: [number, number]; d: number } | null = null;
+    for (let i = 0; i < cells; i += 1) {
+      for (let j = 0; j < cells; j += 1) {
+        const p: [number, number] = [round(x0 + ((i + 0.5) / cells) * (x1 - x0), 4), round(y0 + ((j + 0.5) / cells) * (y1 - y0), 4)];
+        if (!within(p)) continue;
+        const d = boundaryDistance(render.shape, p[0], p[1]);
+        if (!best || d > best.d) best = { p, d };
+      }
+    }
+    if (best) {
+      if (cells > 16) console.log(`anchor for ${r.id} ${r.name} needed a ${cells}x${cells} grid`);
+      anchorRules.grid += 1;
+      return best.p;
+    }
+  }
+  throw new Error(`no interior point found for ${r.id} ${r.name}`);
+}
+
+const anchors = new Map(records.map((r) => [r.id, chooseAnchor(r)]));
+const anchorOf = (id: string): [number, number] => {
+  const a = anchors.get(id);
+  if (!a) throw new Error(`no anchor for ${id}`);
+  return a;
+};
+
+// Terrain samples the true (unsimplified) outline.
+const regionFile = JSON.parse(cached(SOURCES.regions)) as FeatureCollection<Area | null, { FEATURECLA: string }>;
+const regionShapes = regionFile.features
+  .filter((f): f is Feature<Area, { FEATURECLA: string }> => f.geometry !== null && REGION_CLASSES.has(f.properties.FEATURECLA))
+  .map((f) => ({ cls: f.properties.FEATURECLA as RegionClass, shape: toShape(f.geometry) }));
+const trueShapes = new Map(
+  (feature(dissolved, dissolved.objects.layer) as FeatureCollection<Area, Record<string, unknown>>).features.map((f) => [
+    String(f.properties['province']),
+    toShape(f.geometry),
+  ]),
+);
+
+function classify(r: ProvinceRecord, anchor: [number, number]): Terrain {
+  const shape = trueShapes.get(r.id);
+  if (!shape) throw new Error(`no shape for ${r.id}`);
+  const n = MAP.TERRAIN_SAMPLES;
+  const [x0, y0, x1, y1] = shape.bbox;
+  const points: [number, number][] = [];
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j < n; j += 1) {
+      const x = x0 + ((i + 0.5) / n) * (x1 - x0);
+      const y = y0 + ((j + 0.5) / n) * (y1 - y0);
+      if (insidePlanar(shape, x, y)) points.push([x, y]);
+    }
+  }
+  // A province too thin for the grid is judged at its anchor.
+  if (points.length === 0) points.push(anchor);
+  const share = (classes: readonly RegionClass[]): number =>
+    points.filter(([x, y]) => regionShapes.some((g) => classes.includes(g.cls) && insidePlanar(g.shape, x, y))).length /
+    points.length;
+
+  const density = r.population / r.areaKm2;
+  const lat = Math.abs(anchor[1]);
+  const cityPop = r.city?.population ?? 0;
+  const mountains = share(['Range/mtn']);
+  if (
+    (density >= MAP.URBAN_DENSITY && r.areaKm2 < MAP.URBAN_MAX_AREA_KM2) ||
+    (cityPop >= MAP.URBAN_BIG_CITY && density >= MAP.URBAN_BIG_CITY_DENSITY)
+  )
+    return 'urban';
+  if (mountains >= MAP.MOUNTAIN_SHARE) return 'mountains';
+  if (share(['Desert']) >= MAP.DESERT_SHARE) return 'desert';
+  if ((lat >= MAP.ARCTIC_LAT && density < MAP.ARCTIC_MAX_DENSITY) || share(['Tundra']) >= MAP.TUNDRA_SHARE) return 'arctic';
+  if (share(['Plateau', 'Foothills']) >= MAP.HILLS_SHARE || mountains >= MAP.HILLS_MOUNTAIN_SHARE) return 'hills';
+  if (lat <= MAP.JUNGLE_LAT && density < MAP.JUNGLE_MAX_DENSITY) return 'jungle';
+  return 'plains';
+}
+
+const terrainOf = new Map(records.map((r) => [r.id, classify(r, anchorOf(r.id))]));
+
+/** The one province an override names, or a build failure: overrides must never silently miss. */
+function namedProvince(country: string, name: string, file: string): ProvinceRecord {
+  const hits = records.filter((r) => r.countryId === country && r.name === name);
+  if (hits.length !== 1) throw new Error(`${file}: ${country} ${name} matches ${hits.length} provinces`);
+  return hits[0] as ProvinceRecord;
+}
+
+const terrainOverrides = readJson<TerrainOverride[]>('src/data/terrain-overrides.json');
+for (const o of terrainOverrides) {
+  const targets =
+    o.province === undefined
+      ? records.filter((r) => r.countryId === o.country)
+      : [namedProvince(o.country, o.province, 'terrain-overrides.json')];
+  if (targets.length === 0) throw new Error(`terrain-overrides.json: country ${o.country} has no provinces`);
+  for (const r of targets) if (o.from === undefined || terrainOf.get(r.id) === o.from) terrainOf.set(r.id, o.to);
+}
+
+const goodOf = new Map<string, { good: Good; oilField: boolean }>();
+for (const r of records) {
+  const terrain = terrainOf.get(r.id) ?? 'plains';
+  const good: Good =
+    terrain === 'plains' || terrain === 'jungle'
+      ? 'food'
+      : terrain === 'mountains' || terrain === 'urban'
+        ? 'steel'
+        : terrain === 'desert' || terrain === 'arctic'
+          ? 'oil'
+          : fnv1a(r.id) / 4294967296 < MAP.HILLS_STEEL_SHARE
+            ? 'steel'
+            : 'food';
+  goodOf.set(r.id, { good, oilField: false });
+}
+for (const o of readJson<GoodOverride[]>('src/data/good-overrides.json')) {
+  const r = namedProvince(o.country, o.province, 'good-overrides.json');
+  goodOf.set(r.id, { good: o.good, oilField: o.oilField });
+}
+
+const seaPairs = new Set(seaLinks.map(([a, b]) => `${a}|${b}`));
+const edgeKm = (a: string, b: string): number => {
+  // Measured once per unordered pair, so both directions carry the same number.
+  const [p, q] = a < b ? [a, b] : [b, a];
+  return round(geoDistance(anchorOf(p), anchorOf(q)) * EARTH_RADIUS_KM, 1);
+};
+
+const facts: ProvinceFact[] = records.map((r) => {
+  const anchor = anchorOf(r.id);
+  const lon = anchor[0] * RAD;
+  const lat = anchor[1] * RAD;
+  const good = goodOf.get(r.id) ?? { good: 'food', oilField: false };
+  return {
+    id: r.id,
+    name: r.name,
+    countryId: r.countryId,
+    population: r.population,
+    areaKm2: r.areaKm2,
+    city: r.city,
+    capital: r.capital,
+    anchor,
+    xyz: [round(Math.cos(lat) * Math.cos(lon), 6), round(Math.cos(lat) * Math.sin(lon), 6), round(Math.sin(lat), 6)],
+    terrain: terrainOf.get(r.id) ?? 'plains',
+    good: good.good,
+    oilField: good.oilField,
+    neighbours: r.neighbours,
+    edgeKm: r.neighbours.map((n) => edgeKm(r.id, n)),
+    sea: r.neighbours.map((n) => seaPairs.has(r.id < n ? `${r.id}|${n}` : `${n}|${r.id}`)),
+  };
+});
+
+/** The map version saves carry as mapHash: FNV-1a over ids, neighbours, terrain and good, in file order. */
+const version = fnv1a(facts.map((f) => `${f.id}|${f.neighbours.join(',')}|${f.terrain}|${f.good}\n`).join(''))
+  .toString(16)
+  .padStart(8, '0');
+const factsOut: ProvinceFacts = {
+  source: `Natural Earth 10m admin-1, populated places and geography regions @ ${NATURAL_EARTH_COMMIT}, built by scripts/build-provinces.mts (pipeline v2)`,
+  format: 2,
+  version,
+  provinces: facts,
+};
+const factLines = [
+  '{',
+  `"source": ${JSON.stringify(factsOut.source)},`,
+  `"format": ${factsOut.format},`,
+  `"version": ${JSON.stringify(factsOut.version)},`,
+  '"provinces": [',
+  factsOut.provinces.map((f) => JSON.stringify(f)).join(',\n'),
+  ']',
+  '}',
+];
+writeFileSync(join(ROOT, 'public', 'province-facts.json'), `${factLines.join('\n')}\n`);
+
+const tally = <K extends string>(keys: K[]): string =>
+  Object.entries(keys.reduce<Record<string, number>>((acc, k) => ({ ...acc, [k]: (acc[k] ?? 0) + 1 }), {}))
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `${k} ${n}`)
+    .join(', ');
+console.log(`anchors: ${anchorRules.city} at the largest city, ${anchorRules.centroid} at a centroid, ${anchorRules.grid} on the grid`);
+console.log(`terrain: ${tally(facts.map((f) => f.terrain))}`);
+console.log(`goods: ${tally(facts.map((f) => f.good))}; ${facts.filter((f) => f.oilField).length} oil fields`);
+console.log(`province-facts.json version ${version}`);

@@ -1,4 +1,5 @@
-import type { AdjacencyGraph, NationId } from './types';
+/** Country id → adjacent country ids, as `countryGraph(map)` derives them from province edges. */
+type Adjacency = Readonly<Record<string, readonly string[]>>;
 
 /**
  * AI nation colours: the reference data-viz palette's validated dark-mode steps,
@@ -55,9 +56,9 @@ export function borderCost(a: string, b: string): number {
 }
 
 function costAt(
-  colours: Record<NationId, string>,
-  adjacency: AdjacencyGraph,
-  id: NationId,
+  colours: Record<string, string>,
+  adjacency: Adjacency,
+  id: string,
   colour: string,
 ): number {
   let total = 0;
@@ -80,19 +81,19 @@ function costAt(
  * Colours are fixed at game start: a nation keeps its colour as it grows.
  */
 export function assignColours(
-  nationIds: readonly NationId[],
-  adjacency: AdjacencyGraph,
-  playerId: NationId,
-): Record<NationId, string> {
-  const colours: Record<NationId, string> = { [playerId]: PLAYER_COLOUR };
+  nationIds: readonly string[],
+  adjacency: Adjacency,
+  playerId: string,
+): Record<string, string> {
+  const colours: Record<string, string> = { [playerId]: PLAYER_COLOUR };
   const pending = new Set(nationIds.filter((id) => id !== playerId));
 
-  const saturation = (id: NationId): number =>
+  const saturation = (id: string): number =>
     new Set((adjacency[id] ?? []).map((n) => colours[n]).filter(Boolean)).size;
-  const degree = (id: NationId): number => adjacency[id]?.length ?? 0;
+  const degree = (id: string): number => adjacency[id]?.length ?? 0;
 
   while (pending.size > 0) {
-    let next: NationId | null = null;
+    let next: string | null = null;
     for (const id of pending) {
       if (next === null) {
         next = id;
@@ -123,7 +124,7 @@ export function assignColours(
   return colours;
 }
 
-function cheapest(colours: Record<NationId, string>, adjacency: AdjacencyGraph, id: NationId): string {
+function cheapest(colours: Record<string, string>, adjacency: Adjacency, id: string): string {
   let best: string = PALETTE[0];
   let bestCost = Number.POSITIVE_INFINITY;
   for (const colour of PALETTE) {
