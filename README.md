@@ -46,6 +46,14 @@ one batch. Actions cost money and manpower, never an action counter.
   together often can. In one stalled game only 4 of 24 border targets were
   winnable from any single country — and 12 once neighbours could combine.
 
+- **Capitals** — every nation's capital is the country it started from, marked
+  ★ on the map. Take an AI nation's capital and the whole nation capitulates to
+  you: every country it still holds changes hands at once, garrisons halved. AI
+  powers weigh a capital at its whole empire's income, so they hunt each other's
+  and guard their own at a fraction of their usual risk. Yours can fall without
+  ending the war — your government flees and you fight on — since the rules say
+  you lose only with your last country.
+
 You win at 60% of the world. You lose if your last country falls, **or if a rival
 reaches 60% first**.
 
@@ -73,10 +81,15 @@ country that can spare troops.
 launch — from one country, or combined from several; when there is none, it
 suggests the most useful troop movement. It uses
 the AI's own planner, so it never walks you into a trap — and it will not win the
-game for you: breaking an armed border takes your own judgement.
+game for you: breaking an armed border takes your own judgement. **Follow all**
+(`F`) carries out every attack and move the advisor would suggest this turn, one
+after another, and reports how it went. Recruiting and investing stay with you.
+It exists for the part of a war that is already won: past about 40 countries a
+player following the advisor spent 10–25 clicks a turn on orders they had no
+reason to question.
 
 Countries likely to fall next turn are outlined solid red. A turn report tells you
-what you lost while the world moved. `Enter` ends the turn, `Esc` cancels, `H`
+what you lost while the world moved, and which empires capitulated. `Enter` ends the turn, `Esc` cancels, `H`
 frames your nation, `N` selects the next country that can still act (most
 endangered first), `Z` undoes a recruit, investment or move, `?` opens the rules.
 Attacks cannot be undone — rewinding a lost battle and retrying would reroll the
@@ -94,8 +107,9 @@ survivors) so the balance can be debugged from a real game rather than guessed a
 - `src/game/` — all game rules, as **pure functions**. No React, no Next, no
   store imports. ESLint enforces this with a `no-restricted-imports` zone on the
   directory, so the rules stay testable in plain Node. Includes the odds and
-  threat maths (`combat.ts`, `threat.ts`), the order previews the panel shows
-  (`orders.ts`), and the advisor, which is the AI planner run for the player.
+  threat maths (`combat.ts`, `threat.ts`), capitals and capitulation
+  (`capitulation.ts`), the order previews the panel shows (`orders.ts`), and the
+  advisor, which is the AI planner run for the player.
 - `src/game/balance.ts` — every tunable number, in one file. Rebalance here.
 - `src/data/` — hand-authored game data: `countries.seed.json` (population and
   economy tier per country) and `sea-links.json` (crossings the land-border graph
@@ -157,13 +171,19 @@ planet in five years.
 
 Tuned by simulating full games with a scripted player that does exactly what the
 advisor suggests every turn — a competent, careful player — across eight starting
-nations:
+nations and three random seeds, 24 games per difficulty:
 
-| Difficulty | That player wins | Median winning turn |
-| --- | --- | --- |
-| Relaxed | 6 of 8 | 35 |
-| Standard | 4 of 8 | 39 |
-| Ruthless | 2 of 8 | 97 |
+| Difficulty | That player wins | Median winning turn | Before capitals |
+| --- | --- | --- | --- |
+| Relaxed | 17 of 24 | 35 | 15 of 24, turn 41 |
+| Standard | 14 of 24 | 34 | 14 of 24, turn 47 |
+| Ruthless | 3 of 24 | 26 | 3 of 24, turn 45 |
+
+Capitulation left the odds where they were and took about a quarter off a won
+game: it ends the mop-up, but it speeds up rival empires just as much, so on
+Ruthless a rival reaches hegemony sooner too. Its two knobs are `CAPITAL` in
+`balance.ts`: how much of a surrendering army changes sides, and how tightly AI
+nations guard their capitals.
 
 The rules give the player no action counter: they can act from every
 country every turn, while AI great powers are capped per turn. So difficulty comes

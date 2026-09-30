@@ -56,6 +56,16 @@ export interface CombatRecord {
   captured: boolean;
 }
 
+/** A nation that capitulated when its capital fell. */
+export interface SurrenderRecord {
+  loserId: NationId;
+  winnerId: NationId;
+  /** Countries handed over, not counting the capital itself. */
+  countries: number;
+  /** Troops that changed sides. */
+  troops: number;
+}
+
 export interface LogEntry {
   id: number;
   turn: number;
@@ -65,6 +75,7 @@ export interface LogEntry {
   nationIds: NationId[];
   /** Structured outcome for combat entries, so reports never parse the text. */
   combat?: CombatRecord;
+  surrender?: SurrenderRecord;
 }
 
 export interface PlayerStats {
@@ -88,6 +99,8 @@ export interface TurnReport {
   lost: { countryId: CountryId; name: string; byId: NationId }[];
   /** Attacks on the player that failed. */
   held: number;
+  /** Large nations that capitulated anywhere in the world this month. */
+  surrenders: SurrenderRecord[];
   income: number;
   deserted: number;
 }

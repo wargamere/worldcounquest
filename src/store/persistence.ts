@@ -4,7 +4,7 @@ import type { AdjacencyGraph, GameState } from '@/game/types';
  * Bumped whenever GameState changes shape. An older save is discarded rather
  * than loaded half-understood.
  */
-const VERSION = 3;
+const VERSION = 4;
 const KEY = `hegemon.save.v${VERSION}`;
 const HELP_SEEN_KEY = 'hegemon.help-seen';
 

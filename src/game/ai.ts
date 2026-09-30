@@ -1,7 +1,8 @@
-import { ADVISOR, AI_BUDGET, AI_TIERS, DEVELOPMENT, DIFFICULTY } from './balance';
+import { ADVISOR, AI_BUDGET, AI_TIERS, CAPITAL, DEVELOPMENT, DIFFICULTY } from './balance';
 import { assault, attack, invest, moveTroops, recruit, type Contribution } from './actions';
+import { captureIncome, capitulatesOnCapture } from './capitulation';
 import { baseStrength, captureProbability, troopsForChance } from './combat';
-import { countryIncome, garrisonFor, grossIncome, investmentCost, maxAffordableTroops } from './economy';
+import { garrisonFor, grossIncome, investmentCost, maxAffordableTroops } from './economy';
 import { combinedThreat, holdRisk } from './threat';
 import type { CountryId, GameState, NationId } from './types';
 
@@ -44,7 +45,10 @@ export interface AttackPlan {
   troops: number;
   /** Other countries joining the attack, for a combined assault. Empty for a single-country attack. */
   support: Contribution[];
-  /** Target income per troop the win needs; higher is a better deal. */
+  /**
+   * Income the capture brings in — a whole nation's, for a capital that
+   * capitulates — per troop the win needs. Higher is a better deal.
+   */
   value: number;
 }
 
@@ -96,7 +100,7 @@ export function planAttack(
       const troops = holdableCommitment(state, nationId, source.development, target.id, needed, spare);
       if (troops === null) continue;
 
-      const value = countryIncome(target) / needed;
+      const value = captureIncome(state, target.id) / needed;
       if (!best || value > best.value) {
         best = { fromId: source.id, targetId, troops, support: [], value };
       }
@@ -197,7 +201,7 @@ export function planAssault(
     }
     if (chosen.length < 2 || chanceOf() < winChance || !holds()) continue;
 
-    const value = countryIncome(target) / troops;
+    const value = captureIncome(state, targetId) / troops;
     if (!best || value > best.value) {
       const [lead, ...rest] = chosen;
       if (!lead) continue;
@@ -221,8 +225,25 @@ export function executePlan(state: GameState, nationId: NationId, plan: AttackPl
 }
 
 /**
+ * The risk of falling a nation accepts for one of its countries. A capital whose
+ * fall would lose the whole nation is held to a fraction of the usual tolerance.
+ */
+export function toleranceFor(state: GameState, countryId: CountryId, riskTolerance: number): number {
+  return capitulatesOnCapture(state, countryId) ? riskTolerance * CAPITAL.GUARD_TOLERANCE_FACTOR : riskTolerance;
+}
+
+/**
+ * How far a country's chance of falling exceeds what its owner accepts for it:
+ * above 1 it needs troops.
+ */
+function exposure(state: GameState, countryId: CountryId, riskTolerance: number): number {
+  return combinedThreat(state, countryId) / toleranceFor(state, countryId, riskTolerance);
+}
+
+/**
  * Fewest troops that keep `countryId`'s combined chance of falling at or under
- * `riskTolerance`. Threat only falls as the garrison grows, so bisect.
+ * `riskTolerance` — tightened for a capital, see toleranceFor. Threat only falls
+ * as the garrison grows, so bisect.
  */
 export function safeGarrison(
   state: GameState,
@@ -232,8 +253,9 @@ export function safeGarrison(
 ): number {
   const country = state.countries[countryId];
   if (!country) return 0;
+  const tolerance = toleranceFor(state, countryId, riskTolerance);
   const risky = (garrison: number): boolean =>
-    combinedThreat(state, countryId, garrison, ignoreId) > riskTolerance;
+    combinedThreat(state, countryId, garrison, ignoreId) > tolerance;
 
   const floor = Math.min(AI_BUDGET.REAR_GARRISON, country.troops);
   if (!risky(floor)) return floor;
@@ -260,7 +282,7 @@ function stagingCountry(state: GameState, nationId: NationId): CountryId | null 
     for (const neighbourId of state.adjacency[country.id] ?? []) {
       const enemy = state.countries[neighbourId];
       if (!enemy || enemy.ownerId === nationId) continue;
-      const softness = baseStrength(enemy.troops, enemy.development, true) / Math.max(1, countryIncome(enemy));
+      const softness = baseStrength(enemy.troops, enemy.development, true) / Math.max(1, captureIncome(state, enemy.id));
       if (!best || softness < best.softest) best = { id: country.id, softest: softness };
     }
   }
@@ -281,10 +303,10 @@ function recruitWhereUseful(
   if (troops <= 0) return state;
   const owned = Object.values(state.countries).filter((c) => c.ownerId === nationId);
   const endangered = owned
-    .map((c) => ({ id: c.id, chance: combinedThreat(state, c.id) }))
-    .sort((a, b) => b.chance - a.chance)[0];
+    .map((c) => ({ id: c.id, excess: exposure(state, c.id, riskTolerance) }))
+    .sort((a, b) => b.excess - a.excess)[0];
   const target =
-    endangered && endangered.chance > riskTolerance
+    endangered && endangered.excess > 1
       ? endangered.id
       : (stagingCountry(state, nationId) ?? endangered?.id);
   return target ? recruit(state, nationId, target, troops).state : state;
@@ -322,11 +344,11 @@ function reinforce(state: GameState, nationId: NationId, riskTolerance: number):
     if (friendly.length === 0) continue;
 
     const threatened = friendly
-      .map((c) => ({ id: c.id, chance: combinedThreat(current, c.id) }))
-      .sort((a, b) => b.chance - a.chance)[0];
+      .map((c) => ({ id: c.id, excess: exposure(current, c.id, riskTolerance) }))
+      .sort((a, b) => b.excess - a.excess)[0];
 
     let destination: CountryId | null = null;
-    if (threatened && threatened.chance > riskTolerance) {
+    if (threatened && threatened.excess > 1) {
       destination = threatened.id;
     } else if (enemyNeighbours(current, source.id, nationId) === 0) {
       destination =
@@ -401,9 +423,10 @@ export function takeMajorTurn(
 function takeMinorTurn(state: GameState, nationId: NationId): GameState {
   let current = state;
 
-  const thin = Object.values(current.countries).find(
-    (c) => c.ownerId === nationId && c.troops < garrisonFor(c.population),
-  );
+  // The capital first: losing it loses everything else too.
+  const thin = Object.values(current.countries)
+    .filter((c) => c.ownerId === nationId && c.troops < garrisonFor(c.population))
+    .sort((a, b) => Number(b.id === nationId) - Number(a.id === nationId))[0];
   if (thin) {
     const wanted = garrisonFor(thin.population) - thin.troops;
     const affordable = Math.min(wanted, maxAffordableTroops(current, nationId));
@@ -515,4 +538,46 @@ export function adviseMove(state: GameState): MovePlan | null {
   if (!best) return null;
   const { score: _score, ...plan } = best;
   return plan;
+}
+
+export interface AdviceTaken {
+  state: GameState;
+  attacks: number;
+  captured: CountryId[];
+  moves: number;
+}
+
+/**
+ * Carries out every order the advisor would suggest, one at a time, until it has
+ * nothing left to suggest: attacks while any is safe and winnable, then troop
+ * movements. Recruiting and investing stay with the player.
+ *
+ * This is the late-game mop-up in one click. Past about 40 countries a player
+ * following the advisor spent 10–25 clicks a turn on orders they had no reason
+ * to question. The advisor still never wins on its own — it will not break an
+ * armed border, and it stalls a weak start — so judgement stays the player's.
+ */
+export function followAdvice(state: GameState): AdviceTaken {
+  const me = state.playerId;
+  let current = state;
+  let attacks = 0;
+  let moves = 0;
+  const captured: CountryId[] = [];
+  // Every order spends at least one country's action, so this ends on its own;
+  // the bound only guards against a planner bug looping forever.
+  const limit = Object.keys(state.countries).length * 2;
+  for (let i = 0; i < limit; i += 1) {
+    const plan = adviseAttack(current);
+    if (plan) {
+      current = executePlan(current, me, plan);
+      attacks += 1;
+      if (current.countries[plan.targetId]?.ownerId === me) captured.push(plan.targetId);
+      continue;
+    }
+    const move = adviseMove(current);
+    if (!move) break;
+    current = moveTroops(current, me, move.fromId, move.toId, move.troops).state;
+    moves += 1;
+  }
+  return { state: current, attacks, captured, moves };
 }

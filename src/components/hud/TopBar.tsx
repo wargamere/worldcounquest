@@ -54,6 +54,7 @@ interface TopBarProps {
   game: GameState;
   onEndTurn: () => void;
   onAdvise: () => void;
+  onFollow: () => void;
   onNext: () => void;
   /** Null when there is nothing this turn to undo. */
   onUndo: (() => void) | null;
@@ -61,7 +62,7 @@ interface TopBarProps {
   onQuit: () => void;
 }
 
-export function TopBar({ game, onEndTurn, onAdvise, onNext, onUndo, onHelp, onQuit }: TopBarProps) {
+export function TopBar({ game, onEndTurn, onAdvise, onFollow, onNext, onUndo, onHelp, onQuit }: TopBarProps) {
   const nation = game.nations[game.playerId];
   const net = netIncome(game, game.playerId);
 
@@ -83,7 +84,7 @@ export function TopBar({ game, onEndTurn, onAdvise, onNext, onUndo, onHelp, onQu
       <Stat label="Troops" value={compact(totalTroops(game, game.playerId))} />
       <Race game={game} />
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5 whitespace-nowrap">
         <button type="button" onClick={onHelp} title="How to play (?)" className="h-8 w-8 rounded border border-slate-700 text-sm text-slate-300 hover:border-slate-500">
           ?
         </button>
@@ -114,6 +115,14 @@ export function TopBar({ game, onEndTurn, onAdvise, onNext, onUndo, onHelp, onQu
           className="rounded border border-sky-700 px-3 py-1.5 text-sm font-medium text-sky-200 hover:bg-sky-950"
         >
           Advise
+        </button>
+        <button
+          type="button"
+          onClick={onFollow}
+          title="Carry out every attack and move the advisor suggests this turn (F). Recruiting and investing stay with you."
+          className="rounded border border-sky-700 bg-sky-950/60 px-3 py-1.5 text-sm font-medium text-sky-100 hover:bg-sky-900"
+        >
+          Follow all
         </button>
         <button
           type="button"

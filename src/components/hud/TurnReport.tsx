@@ -17,6 +17,13 @@ export function TurnReport({
 }) {
   const report = game.lastReport;
   if (!report) return null;
+  // What you lost, else the empires that just changed hands.
+  const shown: CountryId[] =
+    report.lost.length > 0
+      ? report.lost.map((l) => l.countryId)
+      : Object.values(game.countries)
+          .filter((c) => report.surrenders.some((s) => s.winnerId === c.ownerId))
+          .map((c) => c.id);
   return (
     <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-3">
       <div role="dialog" aria-label="Turn report" className="pointer-events-auto w-full max-w-md rounded-lg border border-slate-700 bg-slate-950/95 p-3 shadow-2xl">
@@ -41,6 +48,16 @@ export function TurnReport({
               Your garrisons threw back {report.held} {report.held === 1 ? 'attack' : 'attacks'}
             </li>
           )}
+          {report.surrenders.map((s) => (
+            <li key={s.loserId} className="flex items-center gap-2 text-amber-100">
+              <span aria-hidden className="text-amber-400">★</span>
+              <span>
+                {game.nations[s.loserId]?.name ?? 'A nation'} capitulated to{' '}
+                <strong>{game.nations[s.winnerId]?.name ?? 'a rival'}</strong> —{' '}
+                {s.countries + 1} countries changed hands
+              </span>
+            </li>
+          ))}
           {report.deserted > 0 && (
             <li className="flex items-center gap-2 text-amber-200">
               <span aria-hidden className="text-amber-400">!</span>
@@ -49,8 +66,8 @@ export function TurnReport({
           )}
         </ul>
         <div className="mt-3 flex justify-end gap-2">
-          {report.lost.length > 0 && (
-            <button type="button" onClick={() => onShow(report.lost.map((l) => l.countryId))} className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-slate-500">
+          {shown.length > 0 && (
+            <button type="button" onClick={() => onShow(shown)} className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-slate-500">
               Show on map
             </button>
           )}

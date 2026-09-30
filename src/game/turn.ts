@@ -1,4 +1,4 @@
-import { DIFFICULTY } from './balance';
+import { CAPITAL, DIFFICULTY } from './balance';
 import { recomputeTiers, takeAITurn } from './ai';
 import { applyIncome, ownedCountries } from './economy';
 import { appendLog, entriesSince, recordHistory } from './log';
@@ -59,6 +59,9 @@ export function endTurn(state: GameState): GameState {
   const held = aiPhase.filter(
     (e) => e.combat?.defenderId === state.playerId && !e.combat.captured,
   ).length;
+  const surrenders = aiPhase
+    .map((e) => e.surrender)
+    .filter((r): r is NonNullable<typeof r> => r !== undefined && r.countries + 1 >= CAPITAL.EMPIRE_COUNTRIES);
   const lost = [...heldBefore]
     .filter((id) => current.countries[id]?.ownerId !== state.playerId)
     .map((id) => ({
@@ -94,6 +97,6 @@ export function endTurn(state: GameState): GameState {
 
   return {
     ...current,
-    lastReport: { turn: state.turn, lost, held, income, deserted },
+    lastReport: { turn: state.turn, lost, held, surrenders, income, deserted },
   };
 }

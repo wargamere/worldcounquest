@@ -1,5 +1,5 @@
-import { moveTroops, recruit } from '@/game/actions';
-import { adviseAttack, adviseMove, executePlan } from '@/game/ai';
+import { recruit } from '@/game/actions';
+import { followAdvice } from '@/game/ai';
 import { maxAffordableTroops } from '@/game/economy';
 import { combinedThreat } from '@/game/threat';
 import type { Country, GameState, Nation } from '@/game/types';
@@ -80,15 +80,5 @@ export function advisorTurn(state: GameState): GameState {
   const worst = mine.sort((a, b) => combinedThreat(current, b.id) - combinedThreat(current, a.id))[0];
   const affordable = maxAffordableTroops(current, me);
   if (worst && affordable > 0) current = recruit(current, me, worst.id, affordable).state;
-  for (let i = 0; i < 40; i += 1) {
-    const plan = adviseAttack(current);
-    if (plan) {
-      current = executePlan(current, me, plan);
-      continue;
-    }
-    const move = adviseMove(current);
-    if (!move) break;
-    current = moveTroops(current, me, move.fromId, move.toId, move.troops).state;
-  }
-  return current;
+  return followAdvice(current).state;
 }

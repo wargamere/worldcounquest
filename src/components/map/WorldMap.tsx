@@ -6,7 +6,8 @@ import { select } from 'd3-selection';
 import 'd3-transition';
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomBehavior } from 'd3-zoom';
 import { mesh } from 'topojson-client';
-import { ADVISOR } from '@/game/balance';
+import { ADVISOR, CAPITAL } from '@/game/balance';
+import { capitulatesOnCapture, isCapital, provinces } from '@/game/capitulation';
 import { UNCLAIMED_COLOUR } from '@/game/colours';
 import { attackPresets, countryRisk, previewAttack } from '@/game/orders';
 import type { CountryId, GameState } from '@/game/types';
@@ -186,21 +187,45 @@ export function WorldMap(props: WorldMapProps) {
   const important = new Set<CountryId>([...mine.map((c) => c.id), ...neighbours, ...(selectedId ? [selectedId] : [])]);
   for (const c of mine) for (const n of game.adjacency[c.id] ?? []) important.add(n);
 
+  /**
+   * Capitals worth marking: yours, and every AI capital whose fall would hand
+   * over more than itself. The capitals of real empires are labelled even at
+   * world zoom, so you can see where each one is vulnerable.
+   */
+  const capitals = new Set<CountryId>();
+  for (const nation of Object.values(game.nations)) {
+    if (nation.isPlayer ? isCapital(game, nation.id) : capitulatesOnCapture(game, nation.id)) capitals.add(nation.id);
+    if (!nation.isPlayer && capitals.has(nation.id) && provinces(game, nation.id).length + 1 >= CAPITAL.EMPIRE_COUNTRIES) {
+      important.add(nation.id);
+    }
+  }
+
   const k = transform.k;
   const showAll = k >= LABEL_ZOOM_THRESHOLD;
   const fontSize = 10 / k;
 
   /**
    * Troop labels, placed greedily in priority order — the order you are giving,
-   * then your own countries, then their neighbours, then everyone else by army
-   * size — skipping any label that would overlap one already placed. Without
-   * this a grown empire's labels pile on top of each other at world zoom.
+   * then your own countries, then rival capitals, then your neighbours, then
+   * everyone else by army size — skipping any label that would overlap one
+   * already placed. Without this a grown empire's labels pile on top of each
+   * other at world zoom.
    */
-  const labels: { id: CountryId; x: number; y: number; w: number; h: number; text: string; ours: boolean }[] = [];
+  const labels: {
+    id: CountryId;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    text: string;
+    ours: boolean;
+    capital: boolean;
+  }[] = [];
   {
     const priority = (id: CountryId, troops: number): number => {
       if (id === selectedId || id === targetId) return 4e9;
       if (game.countries[id]?.ownerId === game.playerId) return 3e9 + troops;
+      if (capitals.has(id)) return 2.5e9 + troops;
       if (important.has(id)) return 2e9 + troops;
       return troops;
     };
@@ -217,17 +242,19 @@ export function WorldMap(props: WorldMapProps) {
     for (const { shape, country } of candidates) {
       const [x, y] = shape.label;
       const text = country.troops >= 10_000 ? `${Math.round(country.troops / 1000)}k` : `${country.troops}`;
-      const w = (text.length * 0.62 + 1) * fontSize;
+      const capital = capitals.has(shape.id);
+      const w = (text.length * 0.62 + (capital ? 1.9 : 1)) * fontSize;
       const h = fontSize * 1.45;
       const clashes = labels.some(
         (l) => Math.abs(l.x - x) * 2 < l.w + w + gap && Math.abs(l.y - y) * 2 < l.h + h + gap,
       );
-      if (!clashes) labels.push({ id: shape.id, x, y, w, h, text, ours: country.ownerId === game.playerId });
+      if (!clashes) labels.push({ id: shape.id, x, y, w, h, text, ours: country.ownerId === game.playerId, capital });
     }
   }
 
   const hovered = hoverId ? game.countries[hoverId] : undefined;
   const hoveredOwner = hovered ? game.nations[hovered.ownerId] : undefined;
+  const hoveredSurrender = hovered && capitulatesOnCapture(game, hovered.id) ? provinces(game, hovered.id).length : 0;
   /** Odds from the selected country, when the hovered one is a target it can attack. */
   const hoverOdds = (() => {
     if (!hovered || !selected || !attackTargets.includes(hovered.id)) return null;
@@ -315,6 +342,7 @@ export function WorldMap(props: WorldMapProps) {
                 fill="#e2e8f0"
                 style={{ fontSize: `${fontSize}px`, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}
               >
+                {label.capital && <tspan fill="#fbbf24">★ </tspan>}
                 {label.text}
               </text>
             </g>
@@ -336,6 +364,11 @@ export function WorldMap(props: WorldMapProps) {
             <div className="mt-0.5 tabular-nums text-slate-300">
               {hovered.troops} troops · dev {hovered.development}
             </div>
+            {hoveredSurrender > 0 && (
+              <div className="mt-0.5 text-amber-200">
+                ★ Capital — taking it wins {hoveredSurrender} more {hoveredSurrender === 1 ? 'country' : 'countries'}
+              </div>
+            )}
             {hoverOdds && selected && (
               <div className="mt-1 border-t border-slate-800 pt-1 tabular-nums text-rose-200">
                 From {selected.name}: {pct(hoverOdds.chance)} with {hoverOdds.troops}
