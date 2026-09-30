@@ -1,7 +1,7 @@
 import { DIFFICULTY } from './balance';
 import { recomputeTiers, takeAITurn } from './ai';
 import { applyIncome, ownedCountries } from './economy';
-import { appendLog, entriesSince } from './log';
+import { appendLog, entriesSince, recordHistory } from './log';
 import { evaluateStatus, rivalHegemon } from './victory';
 import type { GameState, NationId } from './types';
 
@@ -73,6 +73,7 @@ export function endTurn(state: GameState): GameState {
     countries: clearMoveFlags(current),
   };
   current = { ...current, status: evaluateStatus(current) };
+  current = { ...current, history: [...current.history, recordHistory(current)] };
 
   let income = 0;
   let deserted = 0;

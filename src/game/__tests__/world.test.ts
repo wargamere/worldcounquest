@@ -8,6 +8,7 @@ import { createGame } from '@/game/init';
 import { endTurn } from '@/game/turn';
 import { countryCount } from '@/game/victory';
 import type { Difficulty, GameState } from '@/game/types';
+import { advisorTurn } from './helpers';
 
 const world = buildWorld(topology as unknown as CountriesTopology, seeds, seaLinks);
 
@@ -161,5 +162,36 @@ describe('a full game', () => {
     const state = simulate(newGame('standard'), 120);
     const biggest = Math.max(...Object.keys(state.nations).map((id) => countryCount(state, id)));
     expect(biggest).toBeGreaterThan(20);
+  });
+});
+
+describe('history', () => {
+  it('records one point per month, always including the player, never more than the tracked nations', () => {
+    let state = createGame({ seeds, adjacency: world.adjacency, playerCountryId: '250', difficulty: 'standard', randomSeed: 'h' });
+    expect(state.history).toHaveLength(1);
+    for (let i = 0; i < 12; i += 1) state = endTurn({ ...state, status: 'playing' });
+    expect(state.history.map((p) => p.turn)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    for (const point of state.history) {
+      expect(point.counts['250']).toBeDefined();
+      expect(Object.keys(point.counts).length).toBeLessThanOrEqual(11);
+    }
+    const last = state.history[state.history.length - 1]!;
+    expect(last.counts['250']).toBe(Object.values(state.countries).filter((c) => c.ownerId === '250').length);
+  });
+});
+
+describe('the advisor', () => {
+  it('makes real progress, but does not hand the player hegemony within two years on standard', () => {
+    // Regression guard. When combined assaults were first added, for the player
+    // only and under the old difficulty settings, a player who did nothing but
+    // press Advise won at turn 30: 18, then 50, then 107 countries. AI great
+    // powers now combine too and Standard's AI is stronger; this pins the
+    // outcome rather than either cause.
+    let state = createGame({ seeds, adjacency: world.adjacency, playerCountryId: '276', difficulty: 'standard', randomSeed: 'advisor' });
+    for (let i = 0; i < 24 && state.status === 'playing'; i += 1) state = endTurn(advisorTurn(state));
+    expect(state.status).not.toBe('won');
+    const held = countryCount(state, '276');
+    expect(held).toBeGreaterThanOrEqual(8);
+    expect(held).toBeLessThan(95);
   });
 });

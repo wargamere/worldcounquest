@@ -1,3 +1,7 @@
+import { moveTroops, recruit } from '@/game/actions';
+import { adviseAttack, adviseMove, executePlan } from '@/game/ai';
+import { maxAffordableTroops } from '@/game/economy';
+import { combinedThreat } from '@/game/threat';
 import type { Country, GameState, Nation } from '@/game/types';
 
 export interface CountrySpec {
@@ -59,6 +63,32 @@ export function tinyWorld(
     rngState: 7,
     stats: { battlesWon: 0, battlesLost: 0, defencesHeld: 0, countriesLost: 0, peakCountries: 1 },
     lastReport: null,
+    history: [],
     ...overrides,
   };
+}
+
+/**
+ * One turn played the way a player who always takes the advisor's advice would:
+ * recruit everything into the country most at risk, then accept advised attacks
+ * and moves until the advisor has nothing left to suggest.
+ */
+export function advisorTurn(state: GameState): GameState {
+  let current = state;
+  const me = current.playerId;
+  const mine = Object.values(current.countries).filter((c) => c.ownerId === me);
+  const worst = mine.sort((a, b) => combinedThreat(current, b.id) - combinedThreat(current, a.id))[0];
+  const affordable = maxAffordableTroops(current, me);
+  if (worst && affordable > 0) current = recruit(current, me, worst.id, affordable).state;
+  for (let i = 0; i < 40; i += 1) {
+    const plan = adviseAttack(current);
+    if (plan) {
+      current = executePlan(current, me, plan);
+      continue;
+    }
+    const move = adviseMove(current);
+    if (!move) break;
+    current = moveTroops(current, me, move.fromId, move.toId, move.troops).state;
+  }
+  return current;
 }

@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import { DEVELOPMENT, ECONOMY } from '@/game/balance';
-import { countryIncome, investmentCost, maxAffordableTroops, recruitmentCost } from '@/game/economy';
-import { attackPresets, countryRisk, previewAttack } from '@/game/orders';
+import { countryIncome, investmentCost, maxAffordableTroops, netIncome, recruitmentCost } from '@/game/economy';
+import type { Contribution } from '@/game/actions';
+import { attackPresets, countryRisk, previewAssault, previewAttack, supportOptions } from '@/game/orders';
 import type { CountryId, GameState } from '@/game/types';
 import type { Flash } from '@/store/gameStore';
-import { compact, pct } from '../ui/format';
+import { compact, pct, signed } from '../ui/format';
 import { RiskBadge } from '../ui/RiskBadge';
 import { OrderForm } from './OrderForm';
 
@@ -15,13 +16,15 @@ interface CountryPanelProps {
   countryId: CountryId;
   targetId: CountryId | null;
   suggestedTroops: number | null;
+  suggestedSupport: Contribution[] | null;
   flash: Flash | null;
   onInvest: (id: CountryId) => void;
   onRecruit: (id: CountryId, troops: number) => void;
-  onAttack: (troops: number) => void;
+  onAttack: (troops: number, support: Contribution[]) => void;
   onMove: (troops: number) => void;
-  onOrder: (sourceId: CountryId, targetId: CountryId) => void;
+  onOrder: (sourceId: CountryId, targetId: CountryId, troops?: number, support?: Contribution[]) => void;
   onCancelOrder: () => void;
+  onJoiningChange: (ids: CountryId[]) => void;
   onShowNation: (nationId: string) => void;
   onClose: () => void;
 }
@@ -88,14 +91,16 @@ export function CountryPanel(props: CountryPanelProps) {
 
       {targetId && mine ? (
         <OrderForm
-          key={`${countryId}-${targetId}`}
+          key={`${countryId}-${targetId}-${props.suggestedTroops ?? ''}`}
           game={game}
           sourceId={countryId}
           targetId={targetId}
           suggestedTroops={props.suggestedTroops}
+          suggestedSupport={props.suggestedSupport}
           onAttack={props.onAttack}
           onMove={props.onMove}
           onCancel={props.onCancelOrder}
+          onJoiningChange={props.onJoiningChange}
         />
       ) : mine ? (
         <OwnCountryActions {...props} />
@@ -121,6 +126,7 @@ function OwnCountryActions({ game, countryId, onInvest, onRecruit }: CountryPane
   const payback = gain > 0 ? Math.ceil(cost / gain) : null;
   const wanted = Math.max(1, Math.min(recruitCount, Math.max(1, affordable)));
   const price = recruitmentCost(wanted);
+  const netAfter = netIncome(game, game.playerId) - wanted * ECONOMY.TROOP_UPKEEP;
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -186,6 +192,10 @@ function OwnCountryActions({ game, countryId, onInvest, onRecruit }: CountryPane
             </span>
           </span>
         </button>
+        <p className={`text-[10px] ${netAfter < 0 ? 'text-rose-300' : 'text-slate-500'}`}>
+          Net income after: {signed(netAfter)}/turn
+          {netAfter < 0 && ' — the treasury will drain, and troops desert when it is empty'}
+        </p>
       </section>
 
       <p className="rounded border border-dashed border-slate-700 px-2 py-1.5 text-[11px] text-slate-400">
@@ -213,6 +223,23 @@ function ForeignCountryActions({ game, countryId, onOrder }: CountryPanelProps) 
     return <p className="text-xs text-slate-500">None of your countries border this one.</p>;
   }
 
+  // Every bordering country that can still act, each sending what it can spare.
+  const lead = sources.find((s) => !s.country.hasMoved);
+  const helpers = lead ? supportOptions(game, countryId, lead.country.id).filter((h) => h.spare > 0) : [];
+  const leadSpare = lead ? attackPresets(game, lead.country.id, countryId).spare : 0;
+  const combined =
+    lead && helpers.length > 0 && leadSpare > 0
+      ? {
+          troops: leadSpare,
+          support: helpers.map((h) => ({ fromId: h.fromId, troops: h.spare })),
+          chance:
+            previewAssault(game, countryId, [
+              { fromId: lead.country.id, troops: leadSpare },
+              ...helpers.map((h) => ({ fromId: h.fromId, troops: h.spare })),
+            ])?.winChance ?? 0,
+        }
+      : null;
+
   return (
     <section className="flex flex-col gap-1.5">
       <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Attack from</h3>
@@ -231,6 +258,21 @@ function ForeignCountryActions({ game, countryId, onOrder }: CountryPanelProps) 
           <span className="tabular-nums text-slate-300">{pct(chance)} with {troops}</span>
         </button>
       ))}
+      {combined && lead && (
+        <button
+          type="button"
+          onClick={() => onOrder(lead.country.id, countryId, combined.troops, combined.support)}
+          className="flex items-center justify-between gap-2 rounded border border-sky-800 bg-sky-950/30 px-2 py-1.5 text-left text-xs transition hover:border-sky-500"
+        >
+          <span>
+            <span className="font-medium text-sky-100">Combined assault</span>
+            <span className="text-slate-400"> · {combined.support.length + 1} countries, spare troops only</span>
+          </span>
+          <span className="tabular-nums text-slate-200">
+            {pct(combined.chance)} with {combined.troops + combined.support.reduce((a, p) => a + p.troops, 0)}
+          </span>
+        </button>
+      )}
     </section>
   );
 }

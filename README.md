@@ -39,6 +39,12 @@ one batch. Actions cost money and manpower, never an action counter.
   attacks once per turn.
 - **Attack** — an adjacent enemy. Committed troops either take the territory or
   die there.
+- **Combined assault** — attack one enemy from several of your bordering
+  countries at once, as a single battle. Each contributor uses its action; the
+  attacking development is the troop-weighted average. This is how armed borders
+  break: a country pinned by a big neighbour can spare little alone, but three
+  together often can. In one stalled game only 4 of 24 border targets were
+  winnable from any single country — and 12 once neighbours could combine.
 
 You win at 60% of the world. You lose if your last country falls, **or if a rival
 reaches 60% first**.
@@ -57,16 +63,28 @@ the order panel shows:
 
 The default force is the one a careful commander would send: it wins, keeps home
 safe, and leaves enough behind to hold what it takes. Presets jump to a near-sure
-win, a likely win, everything home can spare, or everything.
+win, a likely win, everything home can spare, or everything. Under *Join the
+assault*, tick your other countries that border the target to add their spare
+troops; the odds update as you do, and joiners are outlined on the map. Clicking
+an enemy country offers a one-click *Combined assault* from every bordering
+country that can spare troops.
 
 **Advise** (`A`) suggests the best attack that is both likely to win and safe to
-launch; when there is none, it suggests the most useful troop movement. It uses
+launch — from one country, or combined from several; when there is none, it
+suggests the most useful troop movement. It uses
 the AI's own planner, so it never walks you into a trap — and it will not win the
 game for you: breaking an armed border takes your own judgement.
 
 Countries likely to fall next turn are outlined solid red. A turn report tells you
 what you lost while the world moved. `Enter` ends the turn, `Esc` cancels, `H`
-frames your nation, `?` opens the rules.
+frames your nation, `N` selects the next country that can still act (most
+endangered first), `Z` undoes a recruit, investment or move, `?` opens the rules.
+Attacks cannot be undone — rewinding a lost battle and retrying would reroll the
+dice. Hovering an enemy while one of your countries is selected shows the odds
+from it; the recruit button shows your net income after the purchase.
+
+*Great powers* charts countries held over time for you and the three leading
+rivals against the number that wins, above the standings table.
 
 Combat writes its numbers into the event log (`A 69.3` against `D 14.8`, and the
 survivors) so the balance can be debugged from a real game rather than guessed at.
@@ -111,7 +129,8 @@ anyone who grows past a country-count or income threshold) and **minors**, which
 hold a size-proportionate garrison and only take near-certain wins.
 
 A major power, each turn: invests, recruits where the threat or the opportunity
-is, attacks, then moves spare troops toward threatened or active borders. An
+is, attacks — alone or in a combined assault — then moves spare troops toward
+threatened or active borders. An
 attack is only made if the force it needs leaves the source safe, and is sized so
 the survivors can hold what they take.
 
@@ -136,19 +155,21 @@ planet in five years.
 
 ### Balance
 
-Tuned by simulating full games across five random worlds, with a scripted player
-running the AI's own brain (so it is exactly as clever as each rival):
+Tuned by simulating full games with a scripted player that does exactly what the
+advisor suggests every turn — a competent, careful player — across eight starting
+nations:
 
-| Difficulty | That player wins | World after ten years |
+| Difficulty | That player wins | Median winning turn |
 | --- | --- | --- |
-| Relaxed | 4 of 8 nations tried | ~43 nations left, no AI hegemony |
-| Standard | 2 of 8 | ~30 nations left; an AI hegemon in about 1 world in 3 |
-| Ruthless | 0 of 8 | you are racing an AI hegemon |
+| Relaxed | 6 of 8 | 35 |
+| Standard | 4 of 8 | 39 |
+| Ruthless | 2 of 8 | 97 |
 
-A player as clever as each of ~20 rival majors should win roughly one game in
-twenty, so these numbers come from the difficulty levels themselves: AI income,
-AI caution, and the player's opening war chest. Beating Standard means outplaying
-the AI.
+The rules give the player no action counter: they can act from every
+country every turn, while AI great powers are capped per turn. So difficulty comes
+from the AI: its income, its caution, its attacks per turn, and the player's
+opening war chest. On Standard, playing as well as the advisor wins about half the
+time; beating it reliably means taking the risks the advisor will not.
 
 The event log is filtered to events involving you, your neighbours, or a major
 power, with the full log behind a toggle. Only the player's purchases are logged,

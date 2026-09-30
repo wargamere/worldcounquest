@@ -54,11 +54,14 @@ interface TopBarProps {
   game: GameState;
   onEndTurn: () => void;
   onAdvise: () => void;
+  onNext: () => void;
+  /** Null when there is nothing this turn to undo. */
+  onUndo: (() => void) | null;
   onHelp: () => void;
   onQuit: () => void;
 }
 
-export function TopBar({ game, onEndTurn, onAdvise, onHelp, onQuit }: TopBarProps) {
+export function TopBar({ game, onEndTurn, onAdvise, onNext, onUndo, onHelp, onQuit }: TopBarProps) {
   const nation = game.nations[game.playerId];
   const net = netIncome(game, game.playerId);
 
@@ -86,6 +89,23 @@ export function TopBar({ game, onEndTurn, onAdvise, onHelp, onQuit }: TopBarProp
         </button>
         <button type="button" onClick={onQuit} className="rounded border border-slate-700 px-2 py-1.5 text-xs text-slate-400 hover:border-slate-500 hover:text-slate-200">
           New game
+        </button>
+        <button
+          type="button"
+          onClick={onUndo ?? undefined}
+          disabled={onUndo === null}
+          title="Undo the last recruit, investment or move (Z). Attacks cannot be undone."
+          className="rounded border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          title="Next country that can still act (N)"
+          className="rounded border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-slate-500"
+        >
+          Next ›
         </button>
         <button
           type="button"

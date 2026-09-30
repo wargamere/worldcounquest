@@ -2,6 +2,7 @@ import { holdableCommitment, safeGarrison } from './ai';
 import { ADVISOR } from './balance';
 import { captureProbability, expectedSurvivors, troopsForChance } from './combat';
 import { combinedThreat, holdRisk, strongestThreat, type Threat } from './threat';
+import type { Contribution } from './actions';
 import type { CountryId, GameState } from './types';
 
 export interface AttackPreview {
@@ -16,7 +17,7 @@ export interface AttackPreview {
 
 /**
  * Everything the order panel shows before the player commits to an attack. The
- * numbers come from the same functions the AI decides with, so what the player
+ * numbers come from the same functions the game resolves with, so what the player
  * sees is what the game will actually do.
  */
 export function previewAttack(
@@ -25,21 +26,74 @@ export function previewAttack(
   targetId: CountryId,
   troops: number,
 ): AttackPreview | null {
-  const from = state.countries[fromId];
+  return previewAssault(state, targetId, [{ fromId, troops }]);
+}
+
+/**
+ * The preview for an attack launched from one or more countries at once. The
+ * source risk shown is the worst of the contributing countries.
+ */
+export function previewAssault(
+  state: GameState,
+  targetId: CountryId,
+  contributions: readonly Contribution[],
+): AttackPreview | null {
   const target = state.countries[targetId];
-  if (!from || !target || troops < 1) return null;
+  if (!target) return null;
+  let troops = 0;
+  let weightedDev = 0;
+  let sourceRisk = 0;
+  let owner: string | null = null;
+  for (const part of contributions) {
+    const from = state.countries[part.fromId];
+    if (!from || part.troops < 1) continue;
+    owner = from.ownerId;
+    troops += part.troops;
+    weightedDev += part.troops * from.development;
+    sourceRisk = Math.max(sourceRisk, combinedThreat(state, part.fromId, from.troops - part.troops, targetId));
+  }
+  if (troops < 1 || owner === null) return null;
   const input = {
     attackerTroops: troops,
-    attackerDev: from.development,
+    attackerDev: weightedDev / troops,
     defenderTroops: target.troops,
     defenderDev: target.development,
   };
   return {
     winChance: captureProbability(input),
     survivors: expectedSurvivors(input),
-    sourceRisk: combinedThreat(state, fromId, from.troops - troops, targetId),
-    holdRisk: holdRisk(state, from.ownerId, from.development, targetId, troops),
+    sourceRisk,
+    holdRisk: holdRisk(state, owner, input.attackerDev, targetId, troops),
   };
+}
+
+export interface SupportOption {
+  fromId: CountryId;
+  /** What this country can send while staying under the advisor's risk tolerance. */
+  spare: number;
+  /** Everything but one troop. */
+  all: number;
+}
+
+/**
+ * Your other countries that border `targetId` and could join an assault on it,
+ * most spare troops first.
+ */
+export function supportOptions(state: GameState, targetId: CountryId, excludeId: CountryId): SupportOption[] {
+  const target = state.countries[targetId];
+  if (!target) return [];
+  return (state.adjacency[targetId] ?? [])
+    .map((id) => state.countries[id])
+    .filter(
+      (c): c is NonNullable<typeof c> =>
+        c !== undefined && c.id !== excludeId && c.ownerId === state.playerId && !c.hasMoved && c.troops > 1,
+    )
+    .map((c) => ({
+      fromId: c.id,
+      spare: Math.max(0, c.troops - safeGarrison(state, c.id, ADVISOR.RISK_TOLERANCE, targetId)),
+      all: c.troops - 1,
+    }))
+    .sort((a, b) => b.spare - a.spare);
 }
 
 export interface AttackPresets {

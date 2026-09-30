@@ -75,6 +75,12 @@ export interface PlayerStats {
   peakCountries: number;
 }
 
+/** Countries held at the end of one month, for the biggest nations and the player. */
+export interface HistoryPoint {
+  turn: number;
+  counts: Record<NationId, number>;
+}
+
 /** What happened to the player while the AI nations took their turns. */
 export interface TurnReport {
   /** The month that just ended. */
@@ -103,6 +109,7 @@ export interface GameState {
   rngState: number;
   stats: PlayerStats;
   lastReport: TurnReport | null;
+  history: HistoryPoint[];
 }
 
 export interface CombatResult {

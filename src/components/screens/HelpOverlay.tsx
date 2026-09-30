@@ -46,6 +46,11 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
             10% more combat strength per level. Troops cost upkeep every month; if the treasury runs dry, they desert.
           </li>
           <li>
+            <strong className="text-slate-100">Gang up.</strong> A country pinned by a big neighbour can rarely spare
+            much alone. Several of your countries bordering the same enemy can attack it together — tick them under{' '}
+            <em>Join the assault</em>. Each one uses its action for the turn.
+          </li>
+          <li>
             <strong className="text-slate-100">Stuck?</strong> <em>Advise</em> finds the best attack that is both likely
             to win and safe to launch.
           </li>
@@ -58,6 +63,8 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
             <span><kbd className="rounded border border-slate-700 px-1">Esc</kbd> cancel / deselect</span>
             <span><kbd className="rounded border border-slate-700 px-1">A</kbd> advise</span>
             <span><kbd className="rounded border border-slate-700 px-1">H</kbd> zoom to your nation</span>
+            <span><kbd className="rounded border border-slate-700 px-1">N</kbd> next country that can act</span>
+            <span><kbd className="rounded border border-slate-700 px-1">Z</kbd> undo (not attacks)</span>
             <span>Drag to pan</span>
             <span>Scroll or pinch to zoom</span>
           </div>

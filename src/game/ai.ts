@@ -1,6 +1,6 @@
 import { ADVISOR, AI_BUDGET, AI_TIERS, DEVELOPMENT, DIFFICULTY } from './balance';
-import { attack, invest, moveTroops, recruit } from './actions';
-import { baseStrength, troopsForChance } from './combat';
+import { assault, attack, invest, moveTroops, recruit, type Contribution } from './actions';
+import { baseStrength, captureProbability, troopsForChance } from './combat';
 import { countryIncome, garrisonFor, grossIncome, investmentCost, maxAffordableTroops } from './economy';
 import { combinedThreat, holdRisk } from './threat';
 import type { CountryId, GameState, NationId } from './types';
@@ -42,6 +42,8 @@ export interface AttackPlan {
   targetId: CountryId;
   /** Troops to commit: enough to win, plus enough spare to hold the prize. */
   troops: number;
+  /** Other countries joining the attack, for a combined assault. Empty for a single-country attack. */
+  support: Contribution[];
   /** Target income per troop the win needs; higher is a better deal. */
   value: number;
 }
@@ -96,7 +98,7 @@ export function planAttack(
 
       const value = countryIncome(target) / needed;
       if (!best || value > best.value) {
-        best = { fromId: source.id, targetId, troops, value };
+        best = { fromId: source.id, targetId, troops, support: [], value };
       }
     }
   }
@@ -139,6 +141,83 @@ export function holdableCommitment(
     else low = mid + 1;
   }
   return low;
+}
+
+/**
+ * The best combined assault available: an enemy country that no single owned
+ * country can safely take, but several bordering it can together. Each
+ * contributor offers only what it can spare under `riskTolerance`; the largest
+ * offers are added until the win chance is reached, then more are added if
+ * needed until the survivors could hold the prize.
+ */
+export function planAssault(
+  state: GameState,
+  nationId: NationId,
+  winChance: number,
+  riskTolerance: number,
+): AttackPlan | null {
+  const targets = new Set<CountryId>();
+  for (const country of Object.values(state.countries)) {
+    if (country.ownerId !== nationId || country.hasMoved) continue;
+    for (const n of state.adjacency[country.id] ?? []) {
+      if (state.countries[n] && state.countries[n]?.ownerId !== nationId) targets.add(n);
+    }
+  }
+
+  let best: AttackPlan | null = null;
+  for (const targetId of targets) {
+    const target = state.countries[targetId];
+    if (!target) continue;
+    const offers = (state.adjacency[targetId] ?? [])
+      .map((id) => state.countries[id])
+      .filter((c): c is NonNullable<typeof c> => c !== undefined && c.ownerId === nationId && !c.hasMoved)
+      .map((c) => ({ c, spare: c.troops - safeGarrison(state, c.id, riskTolerance, targetId) }))
+      .filter((o) => o.spare > 0)
+      .sort((a, b) => b.spare - a.spare);
+    if (offers.length < 2) continue;
+
+    const chosen: { c: (typeof offers)[number]['c']; spare: number }[] = [];
+    let troops = 0;
+    let weighted = 0;
+    const chanceOf = (): number =>
+      captureProbability({
+        attackerTroops: troops,
+        attackerDev: weighted / Math.max(1, troops),
+        defenderTroops: target.troops,
+        defenderDev: target.development,
+      });
+    const holds = (): boolean =>
+      holdRisk(state, nationId, weighted / Math.max(1, troops), targetId, troops) <= AI_BUDGET.HOLD_TOLERANCE;
+
+    for (const offer of offers) {
+      chosen.push(offer);
+      troops += offer.spare;
+      weighted += offer.spare * offer.c.development;
+      if (chanceOf() >= winChance && holds()) break;
+    }
+    if (chosen.length < 2 || chanceOf() < winChance || !holds()) continue;
+
+    const value = countryIncome(target) / troops;
+    if (!best || value > best.value) {
+      const [lead, ...rest] = chosen;
+      if (!lead) continue;
+      best = {
+        fromId: lead.c.id,
+        targetId,
+        troops: lead.spare,
+        support: rest.map((o) => ({ fromId: o.c.id, troops: o.spare })),
+        value,
+      };
+    }
+  }
+  return best;
+}
+
+/** Carries out a plan, whether it has one source or several. */
+export function executePlan(state: GameState, nationId: NationId, plan: AttackPlan): GameState {
+  return plan.support.length === 0
+    ? attack(state, nationId, plan.fromId, plan.targetId, plan.troops).state
+    : assault(state, nationId, plan.targetId, [{ fromId: plan.fromId, troops: plan.troops }, ...plan.support]).state;
 }
 
 /**
@@ -304,9 +383,11 @@ export function takeMajorTurn(
   // any country it had just drained — the US spent every turn shipping its army
   // to Russia and never once attacked from its own homeland.
   for (let i = 0; i < settings.attacksPerTurn; i += 1) {
-    const plan = planAttack(current, nationId, settings.winChance, settings.riskTolerance);
+    const plan =
+      planAttack(current, nationId, settings.winChance, settings.riskTolerance) ??
+      planAssault(current, nationId, settings.winChance, settings.riskTolerance);
     if (!plan) break;
-    current = attack(current, nationId, plan.fromId, plan.targetId, plan.troops).state;
+    current = executePlan(current, nationId, plan);
   }
 
   return reinforce(current, nationId, settings.riskTolerance);
@@ -355,7 +436,10 @@ export function takeAITurn(state: GameState, nationId: NationId): GameState {
  * what cannot be held.
  */
 export function adviseAttack(state: GameState): AttackPlan | null {
-  return planAttack(state, state.playerId, ADVISOR.WIN_CHANCE, ADVISOR.RISK_TOLERANCE);
+  return (
+    planAttack(state, state.playerId, ADVISOR.WIN_CHANCE, ADVISOR.RISK_TOLERANCE) ??
+    planAssault(state, state.playerId, ADVISOR.WIN_CHANCE, ADVISOR.RISK_TOLERANCE)
+  );
 }
 
 export interface MovePlan {

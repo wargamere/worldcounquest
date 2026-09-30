@@ -3,6 +3,7 @@
 import { TURN } from '@/game/balance';
 import { formatTurn } from '@/game/log';
 import { controlShare, countryCount, rivalHegemon } from '@/game/victory';
+import { HistoryChart } from '../hud/HistoryChart';
 import type { GameState } from '@/game/types';
 
 function Figure({ label, value }: { label: string; value: string | number }) {
@@ -34,7 +35,10 @@ export function EndScreen({ game, onRestart }: { game: GameState; onRestart: () 
               ? `A rival reached hegemony in ${when}, while you still held ${countryCount(game, game.playerId)} countries.`
               : `Your last territory fell in ${when}, after ${years} years.`}
         </p>
-        <div className="mt-5 grid grid-cols-3 gap-2 text-left">
+        <div className="mt-5 rounded-lg bg-slate-900/60 p-3 text-left">
+          <HistoryChart game={game} height={170} />
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-left">
           <Figure label="Peak size" value={s.peakCountries} />
           <Figure label="Attacks won" value={s.battlesWon} />
           <Figure label="Attacks lost" value={s.battlesLost} />

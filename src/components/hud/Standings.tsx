@@ -4,6 +4,7 @@ import { VICTORY } from '@/game/balance';
 import { grossIncome, totalTroops } from '@/game/economy';
 import type { GameState, NationId } from '@/game/types';
 import { compact } from '../ui/format';
+import { HistoryChart } from './HistoryChart';
 
 /** The biggest powers on the map, and where you stand among them. */
 export function Standings({ game, onShow }: { game: GameState; onShow: (id: NationId) => void }) {
@@ -20,6 +21,9 @@ export function Standings({ game, onShow }: { game: GameState; onShow: (id: Nati
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
+      <div className="mb-3">
+        <HistoryChart game={game} />
+      </div>
       <p className="mb-1.5 text-[11px] text-slate-500">
         {counts.size} nations remain · you rank #{rank} · {goal} countries wins
       </p>

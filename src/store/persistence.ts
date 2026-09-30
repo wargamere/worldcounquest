@@ -4,7 +4,7 @@ import type { AdjacencyGraph, GameState } from '@/game/types';
  * Bumped whenever GameState changes shape. An older save is discarded rather
  * than loaded half-understood.
  */
-const VERSION = 2;
+const VERSION = 3;
 const KEY = `hegemon.save.v${VERSION}`;
 const HELP_SEEN_KEY = 'hegemon.help-seen';
 
@@ -26,7 +26,7 @@ export function loadGame(adjacency: AdjacencyGraph): GameState | null {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as SavedGame;
-    if (!saved.countries || !saved.nations || !saved.playerId || !saved.stats) return null;
+    if (!saved.countries || !saved.nations || !saved.playerId || !saved.stats || !saved.history) return null;
     return { ...saved, adjacency };
   } catch {
     return null;
