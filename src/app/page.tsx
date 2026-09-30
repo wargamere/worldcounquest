@@ -45,6 +45,10 @@ function useShortcuts(active: boolean) {
         case 'A':
           store.advise();
           break;
+        case 'f':
+        case 'F':
+          store.followAdvice();
+          break;
         case 'h':
         case 'H':
           store.focusHome();
@@ -104,6 +108,7 @@ export default function Home() {
         game={game}
         onEndTurn={store.endTurn}
         onAdvise={store.advise}
+        onFollow={store.followAdvice}
         onNext={store.selectNextReady}
         onUndo={store.undoStack.length > 0 ? store.undo : null}
         onHelp={() => store.setHelp(true)}
@@ -166,7 +171,10 @@ export default function Home() {
               <p className="p-3 text-xs leading-relaxed text-slate-500">
                 Select one of your <span className="text-amber-300">gold</span> countries to recruit, invest, move or
                 attack. Press <kbd className="rounded border border-slate-700 px-1">A</kbd> for advice,{' '}
-                <kbd className="rounded border border-slate-700 px-1">Enter</kbd> to end the turn.
+                <kbd className="rounded border border-slate-700 px-1">F</kbd> to follow all of it, and{' '}
+                <kbd className="rounded border border-slate-700 px-1">Enter</kbd> to end the turn. A{' '}
+                <span className="text-amber-300">★</span> marks a capital: take an empire&apos;s and the whole empire
+                surrenders.
               </p>
             )}
           </div>

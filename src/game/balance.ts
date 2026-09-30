@@ -106,6 +106,31 @@ export const VICTORY = {
 } as const;
 
 /**
+ * Every nation's capital is the country it started from. An AI nation whose
+ * capital falls capitulates: every country it still holds passes to the
+ * conqueror at once. The player never capitulates — the government flees and
+ * fights on — because the player is defeated only by losing their last country.
+ *
+ * Without this the last third of a won game was a mop-up: past about 40
+ * countries the outcome was settled, and the player still spent fifteen turns
+ * clicking through 10–25 attacks each on stragglers who could no longer matter.
+ */
+export const CAPITAL = {
+  /** Share of each surrendering garrison that changes sides; the rest disband. */
+  TROOPS_KEPT: 0.5,
+  /**
+   * A capital's garrison is sized against this fraction of the nation's usual
+   * risk tolerance, since losing it loses everything.
+   */
+  GUARD_TOLERANCE_FACTOR: 0.3,
+  /**
+   * Nations at least this big count as empires: their capitals are labelled at
+   * world zoom, and their surrender makes the turn report.
+   */
+  EMPIRE_COUNTRIES: 4,
+} as const;
+
+/**
  * AI runs in two tiers so ~175 nations do not scramble the map or flood the log.
  * Tier A ("major") gets the full heuristic. Tier B gets cheap defensive logic and
  * only attacks badly outmatched neighbours. Tier B promotes on either threshold.

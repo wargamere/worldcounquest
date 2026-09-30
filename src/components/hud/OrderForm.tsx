@@ -8,6 +8,7 @@ import { attackPresets, previewAssault, previewMove, supportOptions } from '@/ga
 import type { CountryId, GameState } from '@/game/types';
 import { pct } from '../ui/format';
 import { RiskBadge } from '../ui/RiskBadge';
+import { CapitalNote } from './CapitalNote';
 
 interface OrderFormProps {
   game: GameState;
@@ -114,6 +115,7 @@ export function OrderForm({
         From {source.name} ({source.troops} troops)
         {isAttack && <> · held by {owner?.name} with {target.troops}, dev {target.development}</>}
       </p>
+      {isAttack && <CapitalNote game={game} countryId={targetId} />}
 
       <label className="flex items-center gap-2 text-xs text-slate-300">
         <span className="w-12 shrink-0">Troops</span>

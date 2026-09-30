@@ -5,7 +5,7 @@ import seedData from '@/data/countries.seed.json';
 import seaLinkData from '@/data/sea-links.json';
 import { assault, attack, invest, moveTroops, recruit, type Contribution } from '@/game/actions';
 import { areAdjacent } from '@/game/adjacency';
-import { adviseAttack, adviseMove } from '@/game/ai';
+import { adviseAttack, adviseMove, followAdvice } from '@/game/ai';
 import { entriesSince } from '@/game/log';
 import { combinedThreat } from '@/game/threat';
 import { createGame } from '@/game/init';
@@ -77,6 +77,7 @@ interface GameStore {
   doMove: (troops: number) => void;
   doAttack: (troops: number, support: Contribution[]) => void;
   advise: () => void;
+  followAdvice: () => void;
   endTurn: () => void;
 
   focusHome: () => void;
@@ -331,19 +332,55 @@ export const useGameStore = create<GameStore>((set, get) => {
         set({ flash: { tone: 'bad', text: outcome.error } });
         return;
       }
-      const [entry] = entriesSince(game, outcome.state);
+      const entries = entriesSince(game, outcome.state);
       const target = outcome.state.countries[targetId];
-      const won = entry?.combat?.captured ?? false;
+      const won = entries.find((e) => e.combat)?.combat?.captured ?? false;
+      const surrender = entries.find((e) => e.surrender)?.surrender;
+      const loser = surrender ? game.nations[surrender.loserId]?.name : undefined;
       commit(outcome.state, {
         undoStack: [],
         selectedId: won ? targetId : selectedId,
         targetId: null,
         suggestedTroops: null,
         suggestedSupport: null,
-        flash: won
-          ? { tone: 'good', text: `${target?.name ?? 'Territory'} captured — ${target?.troops ?? 0} troops hold it.` }
-          : { tone: 'bad', text: `The attack on ${target?.name ?? 'the territory'} failed.` },
+        flash: !won
+          ? { tone: 'bad', text: `The attack on ${target?.name ?? 'the territory'} failed.` }
+          : surrender
+            ? {
+                tone: 'good',
+                text: `${target?.name ?? 'The capital'} has fallen and ${loser ?? 'its nation'} capitulates — ${surrender.countries} more ${surrender.countries === 1 ? 'country' : 'countries'} and ${surrender.troops} troops are yours.`,
+              }
+            : { tone: 'good', text: `${target?.name ?? 'Territory'} captured — ${target?.troops ?? 0} troops hold it.` },
+        ...(surrender ? { focus: focusOn(ownedBy(outcome.state, game.playerId).filter((id) => game.countries[id]?.ownerId === surrender.loserId)) } : {}),
       });
+    },
+
+    /** Every advised attack and move, in one go. */
+    followAdvice: () => {
+      const game = get().game;
+      if (!game || game.status !== 'playing') return;
+      const taken = followAdvice(game);
+      if (taken.attacks === 0 && taken.moves === 0) {
+        get().advise();
+        return;
+      }
+      const surrenders = entriesSince(game, taken.state).filter((e) => e.surrender).length;
+      const parts = [
+        taken.attacks > 0 && `${taken.captured.length} of ${taken.attacks} ${taken.attacks === 1 ? 'attack' : 'attacks'} won`,
+        taken.moves > 0 && `${taken.moves} ${taken.moves === 1 ? 'move' : 'moves'}`,
+        surrenders > 0 && `${surrenders} ${surrenders === 1 ? 'nation' : 'nations'} capitulated`,
+      ].filter(Boolean);
+      const extra: Partial<GameStore> = {
+        selectedId: null,
+        targetId: null,
+        suggestedTroops: null,
+        suggestedSupport: null,
+        flash: { tone: taken.captured.length > 0 ? 'good' : 'info', text: `Advice followed: ${parts.join(', ')}.` },
+        ...(taken.captured.length > 0 ? { focus: focusOn(taken.captured) } : {}),
+      };
+      // Moves alone can be taken back; a battle cannot be rerolled.
+      if (taken.attacks === 0) commitReversible(game, taken.state, extra);
+      else commit(taken.state, { ...extra, undoStack: [] });
     },
 
     /** Best safe attack; failing that, the most useful troop movement. */
@@ -396,7 +433,9 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!game || game.status !== 'playing') return;
       const next = runEndTurn(game);
       const report = next.lastReport;
-      const eventful = report !== null && (report.lost.length > 0 || report.held > 0 || report.deserted > 0);
+      const eventful =
+        report !== null &&
+        (report.lost.length > 0 || report.held > 0 || report.deserted > 0 || report.surrenders.length > 0);
       const selected = get().selectedId;
       commit(next, {
         undoStack: [],

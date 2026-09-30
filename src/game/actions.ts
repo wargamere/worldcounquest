@@ -1,5 +1,6 @@
 import { DEVELOPMENT, MANPOWER, RECRUITMENT } from './balance';
 import { areAdjacent } from './adjacency';
+import { capitulate, capitulatesOnCapture } from './capitulation';
 import { describeCombat, resolveCombat } from './combat';
 import { investmentCost } from './economy';
 import { appendLog } from './log';
@@ -151,6 +152,9 @@ export function attack(
  * spare little on its own, but three such countries together often can: in one
  * stalled game only 4 of 24 border targets were winnable from any single
  * country, and 12 once neighbours could combine.
+ *
+ * Taking an AI nation's capital makes the whole nation capitulate to the
+ * attacker; see capitulation.ts.
  */
 export function assault(
   state: GameState,
@@ -200,14 +204,15 @@ export function assault(
     ? { ...target, ownerId: nationId, troops: result.attackerSurvivors, hasMoved: true }
     : { ...target, troops: result.defenderSurvivors };
 
-  const next = appendLog(
-    { ...state, countries, rngState, stats: tallyBattle(state, nationId, defenderId, result.captured, countries) },
+  let next = appendLog(
+    { ...state, countries, rngState },
     'combat',
     describeCombat(attacker.name, target.name, input, result, contributions.length),
     [nationId, defenderId],
     { attackerId: nationId, defenderId, countryId: targetId, captured: result.captured },
   );
-  return { state: next };
+  if (result.captured && capitulatesOnCapture(state, targetId)) next = capitulate(next, defenderId, nationId);
+  return { state: { ...next, stats: tallyBattle(state, nationId, defenderId, result.captured, next.countries) } };
 }
 
 /** Updates the player's battle record if the player fought in this battle. */

@@ -158,6 +158,16 @@ describe('a full game', () => {
     }
   });
 
+  it('leaves no AI nation alive without its capital: losing it means capitulating', () => {
+    const state = simulate(newGame(), 48);
+    const alive = new Set(Object.values(state.countries).map((c) => c.ownerId));
+    for (const id of alive) {
+      if (id === state.playerId) continue;
+      expect(state.countries[id]?.ownerId, `${state.nations[id]?.name} lives on without its capital`).toBe(id);
+    }
+    expect(state.log.some((entry) => entry.surrender)).toBe(true);
+  });
+
   it('eventually produces large empires, so there is someone to beat', () => {
     const state = simulate(newGame('standard'), 120);
     const biggest = Math.max(...Object.keys(state.nations).map((id) => countryCount(state, id)));

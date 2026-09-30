@@ -51,8 +51,15 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
             <em>Join the assault</em>. Each one uses its action for the turn.
           </li>
           <li>
+            <strong className="text-slate-100">Strike at the capital.</strong> The capital of every nation holding more
+            than one country is marked <span className="text-amber-300">★</span>. Take an empire&apos;s capital and the whole empire capitulates to
+            you, its garrisons halved. Rivals guard theirs closely — and hunt each other&apos;s. Yours can fall without
+            ending the war: your government flees and you fight on.
+          </li>
+          <li>
             <strong className="text-slate-100">Stuck?</strong> <em>Advise</em> finds the best attack that is both likely
-            to win and safe to launch.
+            to win and safe to launch. <em>Follow all</em> carries out every attack and move it would suggest this
+            turn, so a won war does not take a hundred clicks to finish.
           </li>
         </ol>
 
@@ -62,6 +69,7 @@ export function HelpOverlay({ onClose }: { onClose: () => void }) {
             <span><kbd className="rounded border border-slate-700 px-1">Enter</kbd> end turn</span>
             <span><kbd className="rounded border border-slate-700 px-1">Esc</kbd> cancel / deselect</span>
             <span><kbd className="rounded border border-slate-700 px-1">A</kbd> advise</span>
+            <span><kbd className="rounded border border-slate-700 px-1">F</kbd> follow all advice</span>
             <span><kbd className="rounded border border-slate-700 px-1">H</kbd> zoom to your nation</span>
             <span><kbd className="rounded border border-slate-700 px-1">N</kbd> next country that can act</span>
             <span><kbd className="rounded border border-slate-700 px-1">Z</kbd> undo (not attacks)</span>

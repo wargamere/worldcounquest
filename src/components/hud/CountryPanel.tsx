@@ -5,10 +5,12 @@ import { DEVELOPMENT, ECONOMY } from '@/game/balance';
 import { countryIncome, investmentCost, maxAffordableTroops, netIncome, recruitmentCost } from '@/game/economy';
 import type { Contribution } from '@/game/actions';
 import { attackPresets, countryRisk, previewAssault, previewAttack, supportOptions } from '@/game/orders';
+import { isCapital } from '@/game/capitulation';
 import type { CountryId, GameState } from '@/game/types';
 import type { Flash } from '@/store/gameStore';
 import { compact, pct, signed } from '../ui/format';
 import { RiskBadge } from '../ui/RiskBadge';
+import { CapitalNote } from './CapitalNote';
 import { OrderForm } from './OrderForm';
 
 interface CountryPanelProps {
@@ -65,7 +67,7 @@ export function CountryPanel(props: CountryPanelProps) {
             title="Show this nation on the map"
           >
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: owner?.colour }} />
-            {mine ? 'Your territory' : owner?.name}
+            {mine ? (isCapital(game, countryId) ? '★ Your capital' : 'Your territory') : owner?.name}
             <span className="text-slate-600">· {ownerCountries} {ownerCountries === 1 ? 'country' : 'countries'}</span>
           </button>
         </div>
@@ -79,6 +81,8 @@ export function CountryPanel(props: CountryPanelProps) {
           {props.flash.text}
         </p>
       )}
+
+      {!targetId && !mine && <CapitalNote game={game} countryId={countryId} />}
 
       <div className="grid grid-cols-3 gap-1">
         <Stat label="Troops" value={compact(country.troops)} />

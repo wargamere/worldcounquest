@@ -1,5 +1,5 @@
 import { HISTORY, LOG } from './balance';
-import type { CombatRecord, GameState, HistoryPoint, LogEntry, LogKind, NationId } from './types';
+import type { CombatRecord, GameState, HistoryPoint, LogEntry, LogKind, NationId, SurrenderRecord } from './types';
 
 /** Appends an entry, trimming the oldest once the cap is hit. Returns new state. */
 export function appendLog(
@@ -8,6 +8,7 @@ export function appendLog(
   text: string,
   nationIds: NationId[],
   combat?: CombatRecord,
+  surrender?: SurrenderRecord,
 ): GameState {
   const entry: LogEntry = {
     id: state.nextLogId,
@@ -16,6 +17,7 @@ export function appendLog(
     text,
     nationIds,
     ...(combat ? { combat } : {}),
+    ...(surrender ? { surrender } : {}),
   };
   const log = [entry, ...state.log].slice(0, LOG.MAX_ENTRIES);
   return { ...state, log, nextLogId: state.nextLogId + 1 };
