@@ -1,24 +1,30 @@
 /**
- * Shared test helpers (spec §12.1): hand-built tiny worlds, the state
- * invariants every engine test can assert, a state hash and deep freezing.
+ * Shared test helpers (spec §12.1): hand-built tiny worlds, new games on the
+ * committed map, the state invariants every engine test can assert, a state
+ * hash and deep freezing.
  *
  * tinySim builds MapStatic and GameState directly, in the shapes world.ts and
  * init.ts produce, so rule tests do not depend on the committed map data.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { expect } from 'vitest';
 import { AI, COMBAT, ECONOMY, GARRISON, MAP, PROVINCE, EFFECTS, TERRAIN, UNITS, VICTORY } from '../balance';
 import { createCache } from '../cache';
 import { hoursToTicks } from '../clock';
+import { createGame } from '../init';
+import { advance, createSim } from '../sim';
 import { assignColours } from '../colours';
 import { asArmy, asNation, asProvince } from '../ids';
 import { defaultTradePolicy, emptyStats, noBuildings, noShortage, zeroGoods, zeroStocks, zeroUnits } from '../keys';
 import { seedFromString } from '../rng';
 import { UNIT_TYPES } from '../types';
-import { goodsScale } from '../world';
+import { buildMap, goodsScale, parseFacts } from '../world';
 import type {
   Army,
   ArmyId,
   BuildingLevels,
+  CountrySeed,
   Difficulty,
   Edge,
   GameState,
@@ -34,6 +40,7 @@ import type {
   Stance,
   Stocks,
   Terrain,
+  TickEvents,
   UnitCounts,
 } from '../types';
 
@@ -344,15 +351,57 @@ export function tinySim(spec: TinySpec): TinySim {
   };
 }
 
+// ------------------------------------------------------------------ real world
+
+const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
+let realMap: MapStatic | null = null;
+
+/** The committed map, built once per test file. */
+export function realMapStatic(): MapStatic {
+  if (realMap === null) {
+    const read = (path: string): unknown => JSON.parse(readFileSync(`${ROOT}${path}`, 'utf8'));
+    realMap = buildMap(parseFacts(read('public/province-facts.json')), read('src/data/countries.seed.json') as CountrySeed[]);
+  }
+  return realMap;
+}
+
+/** A new game on the committed map (France, Standard, seed "test" unless told otherwise), recording commands. */
+export function realSim(options: { player?: string; difficulty?: Difficulty; seed?: string } = {}): Sim {
+  const map = realMapStatic();
+  const state = createGame(map, {
+    playerCountryId: options.player ?? '250',
+    difficulty: options.difficulty ?? 'standard',
+    seed: options.seed ?? 'test',
+  });
+  return createSim(map, state, { recordCommands: true });
+}
+
+/** Runs whole game hours through the real tick and returns what they reported. */
+export function runHours(sim: Sim, hours: number): TickEvents {
+  return advance(sim, hoursToTicks(hours));
+}
+
 // ------------------------------------------------------------------ invariants
 
 function ids(armies: readonly Army[]): number[] {
   return armies.map((a) => a.id);
 }
 
-function expectSane(value: number, what: string): void {
-  expect(Number.isFinite(value), `${what} is ${value}`).toBe(true);
-  expect(value, what).toBeGreaterThanOrEqual(0);
+/**
+ * Fails with `what` unless `ok`. The invariants run every game hour on the real
+ * map, so a passing check must cost no more than the comparison itself.
+ */
+function ensure(ok: boolean, what: string): void {
+  if (!ok) expect.fail(what);
+}
+
+/** Deep equality, compared as JSON first; Vitest's diff only runs on a mismatch. */
+function same(actual: unknown, wanted: unknown, what: string): void {
+  if (JSON.stringify(actual) !== JSON.stringify(wanted)) expect(actual, what).toEqual(wanted);
+}
+
+function sane(value: number, what: string): void {
+  ensure(Number.isFinite(value) && value >= 0, `${what} is ${value}`);
 }
 
 /** The §12.1 invariants; call between ticks. */
@@ -361,56 +410,53 @@ export function assertInvariants(sim: Sim): void {
   const fresh = createCache(map, state, false);
 
   // The cache matches the state.
-  expect([...cache.armyById.keys()].sort((x, y) => x - y), 'armyById').toEqual([...fresh.armyById.keys()]);
-  expect(cache.armiesAt.map(ids), 'armiesAt').toEqual(fresh.armiesAt.map(ids));
-  expect(cache.armiesOf.map(ids), 'armiesOf').toEqual(fresh.armiesOf.map(ids));
-  expect(cache.inbound.map(ids), 'inbound').toEqual(fresh.inbound.map(ids));
-  expect(cache.nationProvinces, 'nationProvinces').toEqual(fresh.nationProvinces);
-  expect(cache.vp, 'vp').toEqual(fresh.vp);
-  expect(cache.battles, 'battles').toEqual(fresh.battles);
-  expect([...cache.contested], 'contested').toEqual([...fresh.contested]);
+  same([...cache.armyById.keys()].sort((x, y) => x - y), [...fresh.armyById.keys()], 'armyById');
+  same(cache.armiesAt.map(ids), fresh.armiesAt.map(ids), 'armiesAt');
+  same(cache.armiesOf.map(ids), fresh.armiesOf.map(ids), 'armiesOf');
+  same(cache.inbound.map(ids), fresh.inbound.map(ids), 'inbound');
+  same(cache.nationProvinces, fresh.nationProvinces, 'nationProvinces');
+  same(cache.vp, fresh.vp, 'vp');
+  same(cache.battles, fresh.battles, 'battles');
+  same([...cache.contested], [...fresh.contested], 'contested');
 
-  // Nothing negative, nothing NaN.
+  // Nothing negative, nothing NaN; every owner is alive.
   state.provinces.forEach((p, i) => {
-    expectSane(p.garrison, `garrison of ${map.provinces[i]!.id}`);
-    expectSane(p.stability, `stability of ${map.provinces[i]!.id}`);
-    expect(p.stability, 'stability').toBeLessThanOrEqual(100);
+    const id = map.provinces[i]!.id;
+    sane(p.garrison, `garrison of ${id}`);
+    sane(p.stability, `stability of ${id}`);
+    ensure(p.stability <= 100, `stability of ${id} is ${p.stability}`);
+    ensure(state.nations[p.owner]?.alive === true, `owner of ${id} is not alive`);
   });
   for (const nation of state.nations) {
-    for (const [key, amount] of Object.entries(nation.stocks)) expectSane(amount, `${key} of nation ${nation.ix}`);
+    for (const [key, amount] of Object.entries(nation.stocks)) sane(amount, `${key} of nation ${nation.ix}`);
   }
-  for (const amount of Object.values(state.market.pressure)) expect(Number.isFinite(amount), 'market pressure').toBe(true);
-
-  // Every owner is alive.
-  state.provinces.forEach((p, i) => {
-    expect(state.nations[p.owner]?.alive, `owner of ${map.provinces[i]!.id}`).toBe(true);
-  });
+  for (const amount of Object.values(state.market.pressure)) ensure(Number.isFinite(amount), `market pressure is ${amount}`);
 
   // Armies: sorted, alive, on a province or a real edge, never both moving and fighting.
   let lastId = 0;
   for (const army of state.armies) {
     const label = `${army.name} (#${army.id})`;
-    expect(army.id, `${label} order`).toBeGreaterThan(lastId);
+    ensure(army.id > lastId, `${label} is out of id order`);
     lastId = army.id;
-    expect(army.id, `${label} below nextArmyId`).toBeLessThan(state.nextArmyId);
-    expect(army.alive, `${label} alive between ticks`).toBe(true);
-    expect(state.nations[army.owner]?.alive, `${label} owner alive`).toBe(true);
-    expect(army.at >= 0 && army.at < map.provinces.length, `${label} at`).toBe(true);
+    ensure(army.id < state.nextArmyId, `${label} is not below nextArmyId`);
+    ensure(army.alive, `${label} is dead between ticks`);
+    ensure(state.nations[army.owner]?.alive === true, `${label} has a dead owner`);
+    ensure(army.at >= 0 && army.at < map.provinces.length, `${label} stands nowhere`);
     for (const type of UNIT_TYPES) {
       const stack = army.units[type];
-      expectSane(stack.hp, `${label} ${type} hp`);
-      expectSane(stack.count, `${label} ${type} count`);
-      expect(Number.isInteger(stack.count), `${label} ${type} count is whole`).toBe(true);
-      expect(stack.hp, `${label} ${type} hp within count`).toBeLessThanOrEqual(stack.count * UNITS[type].hp + 1e-6);
+      sane(stack.hp, `${label} ${type} hp`);
+      sane(stack.count, `${label} ${type} count`);
+      ensure(Number.isInteger(stack.count), `${label} ${type} count is not whole`);
+      ensure(stack.hp <= stack.count * UNITS[type].hp + 1e-6, `${label} ${type} hp exceeds its count`);
     }
-    for (const p of army.path) expect(p >= 0 && p < map.provinces.length, `${label} path`).toBe(true);
+    for (const p of army.path) ensure(p >= 0 && p < map.provinces.length, `${label} path leaves the map`);
     if (army.leg !== null) {
       const { from, to, ticks, done } = army.leg;
-      expect(from, `${label} leg starts where it stands`).toBe(army.at);
-      expect(map.edges[from]?.some((e) => e.to === to), `${label} leg is an edge`).toBe(true);
-      expect(ticks, `${label} leg ticks`).toBeGreaterThanOrEqual(1);
-      expect(done >= 0 && done <= ticks, `${label} leg progress`).toBe(true);
-      expect(army.battle, `${label} moving and fighting`).toBeNull();
+      ensure(from === army.at, `${label} leg does not start where it stands`);
+      ensure(map.edges[from]?.some((e) => e.to === to) === true, `${label} leg is not an edge`);
+      ensure(ticks >= 1, `${label} leg ticks ${ticks}`);
+      ensure(done >= 0 && done <= ticks, `${label} leg progress ${done}/${ticks}`);
+      ensure(army.battle === null, `${label} is moving and fighting`);
     }
   }
 
@@ -418,9 +464,9 @@ export function assertInvariants(sim: Sim): void {
   for (const p of cache.battles) {
     const province = state.provinces[p]!;
     const here = cache.armiesAt[p]!;
-    expect(here.some((a) => a.owner !== province.owner), `attacker in ${map.provinces[p]!.id}`).toBe(true);
+    ensure(here.some((a) => a.owner !== province.owner), `no attacker in ${map.provinces[p]!.id}`);
     const ownerSide = here.some((a) => a.owner === province.owner) || province.garrison >= GARRISON.EMPTY_BELOW;
-    expect(ownerSide, `defender in ${map.provinces[p]!.id}`).toBe(true);
+    ensure(ownerSide, `no defender in ${map.provinces[p]!.id}`);
   }
 }
 

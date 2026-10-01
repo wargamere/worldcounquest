@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:provinces": "node --max-old-space-size=6144 node_modules/tsx/dist/cli.mjs scripts/build-provinces.mts"
+    "build:provinces": "node --max-old-space-size=6144 node_modules/tsx/dist/cli.mjs scripts/build-provinces.mts",
+    "sim": "tsx scripts/simulate.mts",
+    "bench": "tsx scripts/bench.mts"
   },
   "dependencies": {
     "d3-geo": "3.1.1",
