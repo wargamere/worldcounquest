@@ -2,7 +2,7 @@
   "name": "hegemon",
   "version": "0.1.0",
   "private": true,
-  "description": "Hegemon — a browser nation-conquest strategy game.",
+  "description": "Hegemon \u2014 a browser nation-conquest strategy game.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:provinces": "node --max-old-space-size=6144 node_modules/tsx/dist/cli.mjs scripts/build-provinces.mts",
+    "sim": "tsx scripts/simulate.mts",
+    "bench": "tsx scripts/bench.mts"
   },
   "dependencies": {
     "d3-geo": "3.1.1",
@@ -36,6 +39,7 @@
     "@types/topojson-specification": "1.0.5",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.5",
+    "mapshaper": "0.7.70",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
