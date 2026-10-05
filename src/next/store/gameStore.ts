@@ -16,12 +16,14 @@
 import { useMemo, useSyncExternalStore } from 'react';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import { ADVISOR, MOVEMENT, RUNTIME, TIME } from '@/next/game/balance';
-import { advise as adviseCards, suggestFirstTarget, type Suggestion } from '@/next/game/ai/advisor';
+import { advise as adviseCards, suggestFirstTarget, suggestForce, type Suggestion } from '@/next/game/ai/advisor';
 import { armyById, armiesAt, ownedProvinces } from '@/next/game/cache';
 import { formatDuration } from '@/next/game/clock';
 import { concernsPlayer } from '@/next/game/feed';
 import { createGame } from '@/next/game/init';
 import { previewOrder } from '@/next/game/orders';
+import { serialize } from '@/next/game/save';
+import { isArmyVisible } from '@/next/game/supply';
 import { createSim } from '@/next/game/sim';
 import type {
   Alert,
@@ -34,6 +36,7 @@ import type {
   GameState,
   MapMode,
   MapStatic,
+  NationIx,
   OrderPreview,
   ProvinceIx,
   RunSpeed,
@@ -42,12 +45,15 @@ import type {
   Speed,
   Stance,
   TickEvents,
+  UnitCounts,
 } from '@/next/game/types';
+import { UNIT_TYPES } from '@/next/game/types';
 import { buildMap } from '@/next/game/world';
-import { idleArmies, nationSummary, playerBattles, VERDICT_LABEL } from '@/next/game/views';
+import { isIdle } from '@/next/game/armies';
+import { armyLocation, idleArmies, incomingArmies, nationSummary, playerBattles, VERDICT_LABEL } from '@/next/game/views';
 import { buildGeometry, type MapGeometry } from '@/next/lib/geometry';
 import { fetchMapFiles } from '@/next/lib/mapData';
-import type { MapHandle } from '@/next/components/map/types';
+import type { MapFrame, MapHandle } from '@/next/components/map/types';
 import { onTabHidden, startLoop, wake, type FrameInfo } from './loop';
 import {
   claimTab,
@@ -183,6 +189,17 @@ export interface GameStore {
   dismissLegacyNote(): void;
   closeSuggestions(): void;
   toast(text: string, severity: Severity): void;
+  nextIncoming(): void;
+  focusNation(n: NationIx): void;
+  goToEntry(entry: FeedEntry): void;
+  replayCoach(): void;
+  /** Keyboard actions on the selection (§8.5): M, S, R, Delete, Shift+Delete, T. */
+  mergeSelected(): void;
+  splitSelected(): void;
+  retreatSelected(): void;
+  stopSelected(): void;
+  disbandSelected(confirm: (name: string) => boolean): void;
+  trainingForSelection(): void;
 }
 
 // ------------------------------------------------------------ outside React
@@ -214,12 +231,40 @@ export function getMapStatic(): MapStatic | null {
 export function getGeometry(): MapGeometry | null {
   return mapGeometry;
 }
+export function getMapHandle(): MapHandle | null {
+  return mapHandle;
+}
+/** The player's nation in the running game, for building Commands. */
+export function playerNation(): NationIx | null {
+  return currentSim()?.state.player ?? null;
+}
+/** Dev builds: the session's seed and command log as JSON, for an exact replay (§10). */
+export function exportCommandLog(): string | null {
+  const sim = currentSim();
+  const log = sim?.cache.commandLog ?? null;
+  if (sim === null || log === null) return null;
+  const { state, map } = sim;
+  return JSON.stringify({ seed: state.seed, difficulty: state.difficulty, player: map.nations[state.player]!.id, mapHash: map.hash, commands: log });
+}
+
+/** The size of a save of the running game now, in UTF-16 code units (the ?debug=perf overlay). */
+export function measureSaveBytes(): number {
+  const sim = currentSim();
+  return sim === null ? 0 : serialize(sim.state, sim.map, saveMeta()).length;
+}
+
+/** Real time played in the running game (running time only). */
+export function playedMs(): number {
+  return getSession()?.playedMs ?? 0;
+}
 export function getAlpha(): number {
   return lastAlpha;
 }
 /** MapCanvas hands its camera controls over once it is ready. */
 export function setMapHandle(handle: MapHandle | null): void {
   mapHandle = handle;
+  // A new canvas (a remount, or the next game's map) starts unframed.
+  if (handle === null) framedSession = null;
   const sim = getSession()?.sim ?? null;
   if (handle !== null && sim !== null && framedSession !== sim) {
     framedSession = sim;
@@ -283,6 +328,11 @@ function saveMeta(): { savedAt: number; playedMs: number } {
   return { savedAt: Date.now(), playedMs: getSession()?.playedMs ?? 0 };
 }
 
+/** Phones (§8.6) show fewer toasts. */
+function isPhone(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches;
+}
+
 function isCoarse(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 }
@@ -319,7 +369,7 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
     );
     set((s) => {
       const rest = s.toasts.filter((t) => t.id !== entry.id);
-      const toasts = [{ id: entry.id, entry: { ...entry } }, ...rest].slice(0, RUNTIME.MAX_TOASTS_DESKTOP);
+      const toasts = [{ id: entry.id, entry: { ...entry } }, ...rest].slice(0, isPhone() ? RUNTIME.MAX_TOASTS_PHONE : RUNTIME.MAX_TOASTS_DESKTOP);
       return { toasts };
     });
   };
@@ -626,6 +676,7 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
     setHover(p) {
       if (get().hover === p) return;
       set({ hover: p });
+      wake();
       if (get().draft !== null || get().attackWith !== null) return;
       if (hoverTimer !== null) clearTimeout(hoverTimer);
       hoverTimer = null;
@@ -659,7 +710,8 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
       const name = sim.map.provinces[p]!.name;
       const verdict = preview.forecast === null ? '' : ` · ${VERDICT_LABEL[preview.forecast.verdict]}`;
       const who = own.length === 1 ? (armyById(sim, own[0]!)?.name ?? 'Army') : `${own.length} armies`;
-      get().toast(`${who} → ${name} · ${formatDuration(preview.arriveInTicks)}${verdict}`, 'info');
+      const hostile = preview.intent === 'move' && preview.warnings.includes('crossesHostile') ? ' · crosses enemy land' : '';
+      get().toast(`${who} → ${name} · ${formatDuration(preview.arriveInTicks)}${verdict}${hostile}`, hostile === '' ? 'info' : 'bad');
       const survivors = ownArmies(sim, result.armies.length > 0 ? result.armies : own);
       set({ selection: survivors.length > 0 ? { kind: 'armies', armies: survivors } : { kind: 'none' }, preview: null });
     },
@@ -779,7 +831,10 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
     openAttackWith(p) {
       const sim = currentSim();
       if (sim === null) return;
-      set({ attackWith: { target: p, picked: [] }, draft: null, panel: 'attackWith', selection: { kind: 'province', province: p }, sheet: get().coarse ? 'full' : get().sheet });
+      // suggestForce pre-ticks the fewest armies that win at the advisor's odds (§4.6).
+      const picked = suggestForce(sim, p)?.armies ?? [];
+      set({ attackWith: { target: p, picked: [...picked].sort((a, b) => a - b) }, draft: null, panel: 'attackWith', selection: { kind: 'province', province: p }, sheet: get().coarse ? 'full' : get().sheet });
+      refreshPreview();
       bump();
     },
 
@@ -956,11 +1011,16 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
         urgent = true;
       }
       const step = get().coachStep;
-      if (step === 4 && playerBattles(sim).length > 0) {
+      const captured = events.ownershipChanged.some((p) => sim.state.provinces[p]!.owner === sim.state.player);
+      if (step === 4 && captured) {
+        // A walk-in capture skips the battle step; the capture card then waits for Next.
+        set({ coachStep: 5 });
+        urgent = true;
+      } else if (step === 4 && playerBattles(sim).length > 0) {
         const battle = playerBattles(sim)[0]!;
         set({ coachStep: 5, selection: { kind: 'battle', province: battle } });
         urgent = true;
-      } else if (step === 5 && events.ownershipChanged.some((p) => sim.state.provinces[p]!.owner === sim.state.player)) {
+      } else if (step === 5 && captured) {
         set({ coachStep: 6 });
         urgent = true;
       }
@@ -1081,6 +1141,131 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
       if (sim === null) return;
       pushToast(playerFeedEntry(sim, text, severity));
     },
+
+    mergeSelected() {
+      const sim = currentSim();
+      if (sim === null) return;
+      const own = ownArmies(sim, selectedArmies(get().selection));
+      const first = own[0] === undefined ? undefined : armyById(sim, own[0]);
+      if (first === undefined) return;
+      // One army merges with every idle army of yours standing with it; several merge with each other.
+      const ids = own.length >= 2 ? own : armiesAt(sim, first.at).filter((a) => a.alive && a.owner === sim.state.player && isIdle(sim, a)).map((a) => a.id);
+      if (ids.length < 2) {
+        get().toast('No other idle army stands here to merge with', 'info');
+        return;
+      }
+      get().command({ kind: 'merge', nation: sim.state.player, armies: ids });
+    },
+
+    splitSelected() {
+      const sim = currentSim();
+      if (sim === null) return;
+      const own = ownArmies(sim, selectedArmies(get().selection));
+      const army = own.length === 1 ? armyById(sim, own[0]!) : undefined;
+      if (army === undefined) {
+        get().toast('Select one army to split', 'info');
+        return;
+      }
+      const take: UnitCounts = {};
+      let total = 0;
+      for (const u of UNIT_TYPES) {
+        const half = Math.floor(army.units[u].count / 2);
+        if (half > 0) take[u] = half;
+        total += half;
+      }
+      if (total === 0) {
+        get().toast(`${army.name} is too small to split in half`, 'info');
+        return;
+      }
+      get().command({ kind: 'split', nation: sim.state.player, army: army.id, take });
+    },
+
+    retreatSelected() {
+      const sim = currentSim();
+      if (sim === null) return;
+      const own = ownArmies(sim, selectedArmies(get().selection)).filter((id) => armyById(sim, id)?.battle !== null);
+      if (own.length === 0) {
+        get().toast('None of the selected armies is in a battle', 'info');
+        return;
+      }
+      get().command({ kind: 'retreat', nation: sim.state.player, armies: own, to: null });
+    },
+
+    stopSelected() {
+      const sim = currentSim();
+      if (sim === null) return;
+      const own = ownArmies(sim, selectedArmies(get().selection));
+      if (own.length > 0) get().command({ kind: 'stop', nation: sim.state.player, armies: own });
+    },
+
+    disbandSelected(confirm) {
+      const sim = currentSim();
+      if (sim === null) return;
+      for (const id of ownArmies(sim, selectedArmies(get().selection))) {
+        const army = armyById(sim, id);
+        if (army !== undefined && confirm(army.name)) get().command({ kind: 'disband', nation: sim.state.player, army: id });
+      }
+    },
+
+    trainingForSelection() {
+      const sim = currentSim();
+      if (sim === null) return;
+      const { selection } = get();
+      let p: ProvinceIx | null = selection.kind === 'province' || selection.kind === 'battle' ? selection.province : null;
+      if (selection.kind === 'armies') {
+        const army = armyById(sim, selection.armies[0]!);
+        p = army?.at ?? null;
+      }
+      if (p === null) p = sim.state.nations[sim.state.player]!.capital;
+      if (p === null) return;
+      select({ kind: 'province', province: p });
+      if (get().coarse) set({ sheet: 'full' });
+      if (typeof document !== 'undefined') setTimeout(() => document.getElementById('training-section')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
+    },
+
+    replayCoach() {
+      const sim = currentSim();
+      const prefs = { ...get().prefs, coach: true };
+      savePrefs(prefs);
+      set({ prefs, coachStep: 1, coachTarget: null, panel: null });
+      if (sim !== null) findFirstTarget(sim);
+      bump();
+    },
+
+    goToEntry(entry) {
+      const sim = currentSim();
+      if (sim === null) return;
+      const army = entry.army === null ? undefined : armyById(sim, entry.army);
+      if (army !== undefined && army.alive && (army.owner === sim.state.player || isArmyVisible(sim, army) || get().prefs.showAllArmies)) {
+        select({ kind: 'armies', armies: [army.id] });
+        focusArmy(army.id);
+        return;
+      }
+      if (entry.province === null) return;
+      select(sim.cache.battles.includes(entry.province) ? { kind: 'battle', province: entry.province } : { kind: 'province', province: entry.province });
+      get().focusProvinces([entry.province]);
+    },
+
+    focusNation(n) {
+      const sim = currentSim();
+      if (sim !== null) get().focusProvinces(ownedProvinces(sim, n));
+    },
+
+    nextIncoming() {
+      const sim = currentSim();
+      if (sim === null) return;
+      const list = incomingArmies(sim, get().prefs.showAllArmies);
+      if (list.length === 0) {
+        get().toast('No hostile armies are heading your way', 'info');
+        return;
+      }
+      const current = selectedArmies(get().selection)[0];
+      const at = current === undefined ? -1 : list.indexOf(current);
+      const id = list[(at + 1) % list.length]!;
+      select({ kind: 'armies', armies: [id] });
+      const p = armyLocation(sim, id);
+      if (p !== null) get().focusProvinces([p]);
+    },
   };
 });
 
@@ -1118,6 +1303,66 @@ export function startCard(countryId: string, difficulty: Difficulty): StartCard 
   return card;
 }
 
+/** Provinces the map pulses: the coach's first target and the current Suggest card's province. */
+let highlightKey = '';
+let highlightList: readonly ProvinceIx[] = [];
+function highlightsOf(state: GameStore): readonly ProvinceIx[] {
+  const out: ProvinceIx[] = [];
+  if (state.coachStep === 2 && state.coachTarget !== null) out.push(state.coachTarget.target);
+  const card = state.suggestions[state.suggestionIndex];
+  if (card !== undefined && card.kind === 'attack') out.push(card.plan.target);
+  else if (card !== undefined && card.kind !== 'market') out.push(card.province);
+  const key = out.join(',');
+  if (key !== highlightKey) {
+    highlightKey = key;
+    highlightList = out;
+  }
+  return highlightList;
+}
+
+let lastFrame: MapFrame | null = null;
+/**
+ * The frame the canvas map draws (§9.6): the live Sim plus the UI state it
+ * shows, read once per drawn frame; the same object comes back while nothing changed.
+ * After the session closes it keeps returning the last frame until the map unmounts.
+ */
+export function getMapFrame(): MapFrame | null {
+  const sim = currentSim();
+  if (sim === null) return lastFrame;
+  const state = useGameStore.getState();
+  const selection = state.selection;
+  const frame: MapFrame = {
+    sim,
+    alpha: lastAlpha,
+    selectedArmies: selectedArmySet(selection),
+    selectedProvince: selection.kind === 'province' || selection.kind === 'battle' ? selection.province : null,
+    hover: state.hover,
+    preview: state.preview,
+    mode: state.mapMode,
+    showAll: state.prefs.showAllArmies,
+    highlights: highlightsOf(state),
+    coarse: state.coarse,
+  };
+  const prev = lastFrame;
+  if (
+    prev !== null &&
+    prev.sim === frame.sim &&
+    prev.alpha === frame.alpha &&
+    prev.selectedArmies === frame.selectedArmies &&
+    prev.selectedProvince === frame.selectedProvince &&
+    prev.hover === frame.hover &&
+    prev.preview === frame.preview &&
+    prev.mode === frame.mode &&
+    prev.showAll === frame.showAll &&
+    prev.highlights === frame.highlights &&
+    prev.coarse === frame.coarse
+  ) {
+    return prev;
+  }
+  lastFrame = frame;
+  return frame;
+}
+
 /** The selected armies as the map wants them; the set is rebuilt only when the selection changes. */
 let selectionSetFor: Selection | null = null;
 let selectionSet: ReadonlySet<ArmyId> = new Set();
@@ -1132,37 +1377,35 @@ export function selectedArmySet(selection: Selection): ReadonlySet<ArmyId> {
 // ------------------------------------------------------------------ views
 
 /** A view source per selector: it recomputes only when `uiVersion` (or heavyVersion) or the session changes. */
-function viewSource<T>(select: (sim: Sim) => T, heavy: boolean) {
+function viewSource<T>(select: (sim: Sim) => T, heavy: boolean): { subscribe: (fn: () => void) => () => void; get: () => T | null; server: () => T | null } {
   let version = -1;
   let sim: Sim | null = null;
   let value: T | null = null;
-  return {
-    subscribe(fn: () => void): () => void {
-      const offStore = useGameStore.subscribe((s, prev) => {
-        if ((heavy ? s.heavyVersion !== prev.heavyVersion : s.uiVersion !== prev.uiVersion)) fn();
-      });
-      const offSession = subscribeSession(fn);
-      return () => {
-        offStore();
-        offSession();
-      };
-    },
-    get(): T | null {
-      const state = useGameStore.getState();
-      const v = heavy ? state.heavyVersion : state.uiVersion;
-      const current = currentSim();
-      if (v !== version || current !== sim) {
-        version = v;
-        sim = current;
-        const next = current === null ? null : select(current);
-        if (!shallowEqual(next, value)) value = next;
-      }
-      return value;
-    },
-    server(): T | null {
-      return null;
-    },
+  const subscribe = (fn: () => void): (() => void) => {
+    const offStore = useGameStore.subscribe((s, prev) => {
+      if (heavy ? s.heavyVersion !== prev.heavyVersion : s.uiVersion !== prev.uiVersion) fn();
+    });
+    const offSession = subscribeSession(fn);
+    return () => {
+      offStore();
+      offSession();
+    };
   };
+  const get = (): T | null => {
+    const state = useGameStore.getState();
+    const v = heavy ? state.heavyVersion : state.uiVersion;
+    const current = currentSim();
+    if (v !== version || current !== sim) {
+      version = v;
+      sim = current;
+      const next = current === null ? null : select(current);
+      if (!shallowEqual(next, value)) value = next;
+    }
+    return value;
+  };
+  // No session exists while the page is prerendered or hydrated, so the server snapshot is the same read.
+  const server = get;
+  return { subscribe, get, server };
 }
 
 /**

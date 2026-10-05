@@ -9,18 +9,19 @@
  * one of these, and every change goes back through store.command.
  */
 import { ADVISOR, BUILDINGS, COMBAT, EFFECTS, GARRISON, MARKET, PROVINCE, TIME, UNITS, VICTORY } from './balance';
-import { suggestForce } from './ai/advisor';
+import { suggestForce, type Suggestion } from './ai/advisor';
 import { threatAt } from './ai/assess';
 import { armyStatus, isIdle } from './armies';
-import { buildingLabel, buildingPreview, type BuildingPreview } from './buildings';
+import { bestProvincesFor, buildingLabel, buildingPreview, type BuildingPreview } from './buildings';
 import { armiesAt, armiesOf, armyById, inboundTo, isContested, ownedProvinces } from './cache';
 import { dayOf, formatClock, formatDuration, hoursToTicks } from './clock';
 import { battleInputAt, battleModifiers } from './combat';
 import { daysLeft, nationRates, provinceOutput, recruitCap, STOCK_LABELS, type NationRates } from './economy';
 import { predictBattle, verdictOf, winChance } from './forecast';
 import { zeroUnits } from './keys';
-import { priceFactor, unitPrice } from './market';
+import { priceFactor, quote, unitPrice } from './market';
 import { etaTicks, planEta, planOrder } from './movement';
+import { previewOrder } from './orders';
 import { garrisonCap, stabilityFactor, statusOf } from './province';
 import { isArmyVisible, isConnected, isSuppliedAt } from './supply';
 import { canTrain, trainHours } from './training';
@@ -33,6 +34,7 @@ import type {
   BuildingType,
   Construction,
   Cost,
+  Difficulty,
   Forecast,
   Good,
   HistoryPoint,
@@ -470,6 +472,8 @@ export interface ArmyView {
   moving: boolean;
   idle: boolean;
   canSplit: boolean;
+  /** Own idle armies standing with this one (itself included) that a merge would join; empty below 2. */
+  mergeable: ArmyId[];
   rows: { id: ArmyId; name: string; units: number; eta: number | null; status: string; at: ProvinceIx }[];
 }
 
@@ -493,6 +497,21 @@ function statusLine(sim: Sim, army: Army): string {
   const eta = etaTicks(sim, army);
   const verb = army.intent === 'attack' ? 'Attacking' : 'Marching to';
   return eta === null ? `${verb} ${where}` : `${verb} ${where} — arrives in ${formatDuration(eta)}`;
+}
+
+/** Own idle armies standing where `army` stands, ascending id; empty unless at least two. */
+function mergeableAt(sim: Sim, army: Army): ArmyId[] {
+  const ids = armiesAt(sim, army.at)
+    .filter((a) => a.alive && a.owner === army.owner && isIdle(sim, a))
+    .map((a) => a.id);
+  return ids.length >= 2 ? ids : [];
+}
+
+/** Where an army is, for framing it: the end of its leg while moving. */
+export function armyLocation(sim: Sim, id: ArmyId): ProvinceIx | null {
+  const army = armyById(sim, id);
+  if (army === undefined || !army.alive) return null;
+  return army.leg?.to ?? army.at;
 }
 
 export function armyView(sim: Sim, ids: readonly ArmyId[]): ArmyView | null {
@@ -548,8 +567,30 @@ export function armyView(sim: Sim, ids: readonly ArmyId[]): ArmyView | null {
     moving: armies.some((a) => a.leg !== null || a.path.length > 0),
     idle: statuses.every((s) => s === 'idle'),
     canSplit: ours && armies.length === 1 && statuses[0] === 'idle' && totalCount(first.units) >= 2,
+    mergeable: ours && together && standing ? mergeableAt(sim, first) : [],
     rows: armies.map((a) => ({ id: a.id, name: a.name, units: totalCount(a.units), eta: etaTicks(sim, a), status: statusLine(sim, a), at: a.at })),
   };
+}
+
+/** Compact rows for lists of armies ("Armies here", reinforcements), in the order given. */
+export function armyRows(sim: Sim, ids: readonly ArmyId[]): { id: ArmyId; name: string; owner: NationIx; ownerName: string; colour: string; units: number; ours: boolean; status: string }[] {
+  const { state } = sim;
+  const out: { id: ArmyId; name: string; owner: NationIx; ownerName: string; colour: string; units: number; ours: boolean; status: string }[] = [];
+  for (const id of ids) {
+    const army = armyById(sim, id);
+    if (army === undefined || !army.alive) continue;
+    out.push({
+      id,
+      name: army.name,
+      owner: army.owner,
+      ownerName: nationName(sim, army.owner),
+      colour: state.nations[army.owner]!.colour,
+      units: totalCount(army.units),
+      ours: army.owner === state.player,
+      status: army.owner === state.player ? statusLine(sim, army) : armyStatus(sim, army),
+    });
+  }
+  return out;
 }
 
 // -------------------------------------------------------------------- battle
@@ -908,7 +949,7 @@ export function endView(
 /** The end screen's extras: hour, peaks and the five biggest surrenders with names. */
 export function endDetails(sim: Sim): {
   clock: string;
-  difficulty: string;
+  difficulty: Difficulty;
   seed: string;
   finalShare: number;
   peakShare: number;
@@ -933,6 +974,119 @@ export function endDetails(sim: Sim): {
     largestBattle: largest === null ? null : { name: provinceName(sim, largest.province), day: dayOf(largest.tick), hp: largest.hp },
     chart: historyFrom(sim, state.history),
   };
+}
+
+// ------------------------------------------------------------ the Exchange
+
+export interface TradeOption {
+  /** Signed: positive buys, negative sells. */
+  amount: number;
+  funds: number;
+  factorAfter: number;
+  label: string;
+  reason: string | null;
+}
+
+/** Bisection steps for the largest affordable purchase. */
+const MAX_BUY_STEPS = 40;
+
+/** The Exchange buttons for one good: Buy/Sell 100, 1,000 and Max, each with a live quote (§8.3). */
+export function tradeOptions(sim: Sim, good: Good): { buy: TradeOption[]; sell: TradeOption[] } {
+  const { state } = sim;
+  const stocks = state.nations[state.player]!.stocks;
+  const market = state.market;
+  const cap = MARKET.MAX_TRADE_DEPTH_SHARE * MARKET.DEPTH[good];
+  let lo = 0;
+  let hi = cap;
+  if (quote(market, good, hi).funds > stocks.funds) {
+    for (let i = 0; i < MAX_BUY_STEPS; i += 1) {
+      const mid = (lo + hi) / 2;
+      if (quote(market, good, mid).funds <= stocks.funds) lo = mid;
+      else hi = mid;
+    }
+    hi = lo;
+  }
+  const maxBuy = Math.floor(hi);
+  const maxSell = Math.floor(Math.min(stocks[good], cap));
+  const option = (amount: number, label: string, side: 'buy' | 'sell'): TradeOption => {
+    const q = quote(market, good, amount);
+    let reason: string | null = null;
+    if (side === 'buy' && (amount === 0 || q.funds > stocks.funds)) reason = 'Not enough Funds';
+    else if (side === 'sell' && (amount === 0 || -q.amount > stocks[good])) reason = `Not enough ${STOCK_LABELS[good]}`;
+    return { amount: q.amount, funds: q.funds, factorAfter: q.factorAfter, label, reason };
+  };
+  return {
+    buy: [...MARKET.TRADE_STEPS.map((a) => option(a, `Buy ${a.toLocaleString('en-US')}`, 'buy')), option(maxBuy, 'Buy max', 'buy')],
+    sell: [...MARKET.TRADE_STEPS.map((a) => option(-a, `Sell ${a.toLocaleString('en-US')}`, 'sell')), option(-maxSell, 'Sell max', 'sell')],
+  };
+}
+
+// ------------------------------------------------------- Build in best N
+
+/** "Build in best N" (§8.3): the player's provinces ranked by bestProvincesFor, with names. */
+export function bestBuildView(sim: Sim, b: BuildingType, count: number): { province: ProvinceIx; name: string; label: string; preview: BuildingPreview }[] {
+  const { map, state } = sim;
+  return bestProvincesFor(sim, state.player, b, count).map(({ province, preview }) => ({
+    province,
+    name: map.provinces[province]!.name,
+    label: buildingLabel(b, map.provinces[province]!.good),
+    preview,
+  }));
+}
+
+// ------------------------------------------------------------- the coach
+
+/** Names the onboarding cards fill in (§8.7). */
+export function coachHints(sim: Sim): {
+  nation: string;
+  firstArmy: string | null;
+  capital: string | null;
+  works: { province: ProvinceIx; name: string; label: string; paybackDays: number | null } | null;
+} {
+  const { state, map } = sim;
+  const n = state.player;
+  const capital = state.nations[n]!.capital;
+  const armies = armiesOf(sim, n).filter((a) => a.alive);
+  const first = armies.find((a) => a.at === capital) ?? armies[0];
+  const best = bestProvincesFor(sim, n, 'works', 1)[0];
+  return {
+    nation: nationName(sim, n),
+    firstArmy: first?.name ?? null,
+    capital: capital === null ? null : provinceName(sim, capital),
+    works:
+      best === undefined
+        ? null
+        : { province: best.province, name: map.provinces[best.province]!.name, label: buildingLabel('works', map.provinces[best.province]!.good), paybackDays: best.preview.paybackDays },
+  };
+}
+
+// ---------------------------------------------------------------- Suggest
+
+/** One card's sentence (§6.9), e.g. "Take Alsace with 2nd and 5th Army — Likely 85%, arrive together in 11 h, flank ×2". */
+export function suggestionText(sim: Sim, card: Suggestion): string {
+  const name = (p: ProvinceIx): string => sim.map.provinces[p]?.name ?? '';
+  const armies = (ids: readonly ArmyId[]): string => {
+    const names = armyRows(sim, ids).map((a) => a.name);
+    return names.length <= 1 ? (names[0] ?? 'an army') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  };
+  switch (card.kind) {
+    case 'attack': {
+      const f = card.forecast;
+      const flank = card.plan.directions > 1 ? `, flank ×${card.plan.directions}` : '';
+      const together = card.plan.armies.length > 1 ? 'arrive together in' : 'arrives in';
+      return `Take ${name(card.plan.target)} with ${armies(card.plan.armies)} — ${VERDICT_LABEL[f.verdict]} ${Math.round(f.winChance * 20) * 5}%, ${together} ${formatDuration(card.plan.etaTicks)}${flank}`;
+    }
+    case 'defend': {
+      const eta = previewOrder(sim, sim.state.player, card.armies, card.province, true).arriveInTicks;
+      return `${name(card.province)} is threatened — send ${armies(card.armies)} (${formatDuration(eta)})`;
+    }
+    case 'build':
+      return `${buildingLabel(card.building, sim.map.provinces[card.province]!.good)} in ${name(card.province)} pay back in ${Math.ceil(card.paybackDays)} days`;
+    case 'train':
+      return `Training Ground idle in ${name(card.province)} — train ${UNITS[card.unit].name}`;
+    case 'market':
+      return `${STOCK_LABELS[card.good]} is running low — buy ${Math.round(card.amount).toLocaleString('en-US')} for ${Math.round(card.funds).toLocaleString('en-US')}`;
+  }
 }
 
 // --------------------------------------------------------------- the start

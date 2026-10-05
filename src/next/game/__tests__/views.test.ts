@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { armiesOf, ownedProvinces } from '../cache';
+import { advise } from '../ai/advisor';
 import { previewOrder } from '../orders';
 import { STOCK_KEYS } from '../types';
 import type { ProvinceIx, Sim } from '../types';
 import {
+  armyLocation,
+  armyRows,
   armyView,
+  bestBuildView,
+  coachHints,
   attackWithView,
   battleView,
   constructionsView,
@@ -23,7 +28,9 @@ import {
   provinceView,
   standingsView,
   stockView,
+  suggestionText,
   tooltipView,
+  tradeOptions,
 } from '../views';
 import { deepFreeze, realSim, runHours, stateHash, tinySim } from './helpers';
 
@@ -67,6 +74,15 @@ function everyView(sim: Sim): void {
   const economy = economyView(sim);
   expect(economy.topProducers.length).toBeLessThanOrEqual(5);
   expect(exchangeView(sim).map((g) => g.good)).toEqual(['food', 'steel', 'oil']);
+  for (const good of ['food', 'steel', 'oil'] as const) {
+    const options = tradeOptions(sim, good);
+    for (const o of options.buy) expect(o.reason !== null || o.funds <= state.nations[state.player]!.stocks.funds + 1e-9).toBe(true);
+    for (const o of options.sell) expect(o.amount).toBeLessThanOrEqual(0);
+  }
+  for (const b of ['works', 'training', 'draft'] as const) expect(bestBuildView(sim, b, 5).length).toBeLessThanOrEqual(5);
+  expect(coachHints(sim).nation).toBe(map.nations[state.player]!.name);
+  for (const army of state.armies.slice(0, 50)) expect(armyLocation(sim, army.id)).not.toBeNull();
+  expect(armyRows(sim, state.armies.map((a) => a.id))).toHaveLength(state.armies.filter((a) => a.alive).length);
   productionView(sim);
   constructionsView(sim);
   const standings = standingsView(sim, 12);
@@ -78,6 +94,7 @@ function everyView(sim: Sim): void {
   expect(endView(sim, 1000).day).toBeGreaterThanOrEqual(1);
   endDetails(sim);
   nationSummary(sim, state.player);
+  for (const card of advise(sim, 3)) expect(suggestionText(sim, card).length).toBeGreaterThan(0);
   expect(stateHash(sim)).toBe(before);
 }
 
@@ -146,6 +163,28 @@ describe('views', () => {
     const multi = armyView(sim, [a(0), a(1)])!;
     expect(multi.name).toBe('2 armies');
     expect(multi.canMerge).toBe(false);
+    expect(armyView(sim, [a(0)])!.mergeable).toEqual([]);
+  });
+
+  it('offers merges of co-located idle armies and Exchange quotes within the Funds', () => {
+    const { sim, a } = tinySim({
+      provinces: { A: { owner: 'FR' }, B: { owner: 'BE' } },
+      edges: [['A', 'B']],
+      armies: [
+        { owner: 'FR', at: 'A', units: { rifles: 3 } },
+        { owner: 'FR', at: 'A', units: { rifles: 2 } },
+      ],
+      player: 'FR',
+      stocks: { FR: { funds: 500, food: 40 } },
+    });
+    deepFreeze(sim.state);
+    expect(armyView(sim, [a(1)])!.mergeable).toEqual([a(0), a(1)]);
+    const food = tradeOptions(sim, 'food');
+    const max = food.buy[food.buy.length - 1]!;
+    expect(max.funds).toBeLessThanOrEqual(500);
+    expect(max.reason).toBeNull();
+    expect(food.sell[food.sell.length - 1]!.amount).toBe(-40);
+    expect(food.sell[1]!.reason).toMatch(/Not enough Food/);
   });
 
   it('shows integration countdowns and the original nation fighting on', () => {

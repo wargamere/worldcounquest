@@ -96,7 +96,7 @@ function polygonsOf(geometry: Polygon<{ id: string }> | MultiPolygon<{ id: strin
 }
 
 function geometriesByProvince(topology: ProvincesTopology, map: MapStatic): (Polygon<{ id: string }> | MultiPolygon<{ id: string }>)[] {
-  const out: (Polygon<{ id: string }> | MultiPolygon<{ id: string }>)[] = new Array(map.provinces.length);
+  const out = new Array<Polygon<{ id: string }> | MultiPolygon<{ id: string }>>(map.provinces.length);
   for (const geometry of topology.objects.provinces.geometries) {
     if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') continue;
     const ix = map.provinceById.get(String(geometry.id));
@@ -274,7 +274,7 @@ export function buildGeometry(topology: ProvincesTopology, map: MapStatic): MapG
         if (ringIndex === 0 && size > best.area) best = { area: size, cx: moments.cx, cy: moments.cy, box: [rx0, ry0, rx1, ry1] };
       });
     }
-    provinceRingCount[ix] = ringStarts.length - provinceRingStart[ix]!;
+    provinceRingCount[ix] = ringStarts.length - provinceRingStart[ix];
     if (provinceRingCount[ix] === 0) throw new Error(`Province ${map.provinces[ix]!.id} has no drawable ring`);
     bbox.set([x0, y0, x1, y1], ix * 4);
     area[ix] = Math.max(0, total);
