@@ -430,7 +430,7 @@ export function createMapController(o: MapControllerOptions): MapController {
     },
     home() {
       const sim = o.getFrame().sim;
-      const own = ownedProvinces(sim, sim.state.player);
+      const own = homeland(sim);
       if (own.length > 0) handle.frameProvinces(own, HOME_MS);
       else applyCamera(worldCamera(viewW, viewH), HOME_MS);
     },
@@ -455,3 +455,26 @@ function frameAlpha(frame: MapFrame): number {
   return frame.sim.state.armies.some((a) => a.leg !== null) ? frame.alpha : 0;
 }
 
+
+/**
+ * The player's provinces joined by land to their capital (or to their first
+ * province once the capital is lost). Framing every owned province put the
+ * camera over the Atlantic for France, because French Guiana is French.
+ */
+function homeland(sim: Sim): ProvinceIx[] {
+  const n = sim.state.player;
+  const own = ownedProvinces(sim, n);
+  const capital = sim.state.nations[n]!.capital;
+  const start = capital !== null && sim.state.provinces[capital]!.owner === n ? capital : own[0];
+  if (start === undefined) return [];
+  const seen = new Set<ProvinceIx>([start]);
+  const queue: ProvinceIx[] = [start];
+  for (let head = 0; head < queue.length; head += 1) {
+    for (const e of sim.map.edges[queue[head]!]!) {
+      if (e.sea || seen.has(e.to) || sim.state.provinces[e.to]!.owner !== n) continue;
+      seen.add(e.to);
+      queue.push(e.to);
+    }
+  }
+  return queue;
+}

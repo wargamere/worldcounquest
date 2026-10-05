@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAPITAL, RENDER, TIME } from '@/next/game/balance';
+import { RENDER, TIME } from '@/next/game/balance';
 import { setOwner } from '@/next/game/cache';
 import { asProvince } from '@/next/game/ids';
 import { tinySim } from '@/next/game/__tests__/helpers';
@@ -123,7 +123,7 @@ describe('labels and stars', () => {
   });
 
   it("shows the player's seat and empires always, every seat once city dots show", () => {
-    const owners = ['me', 'small', ...Array.from({ length: CAPITAL.EMPIRE_PROVINCES }, () => 'empire')];
+    const owners = ['me', 'small', ...Array.from({ length: RENDER.STAR_PROVINCES }, () => 'empire')];
     const world = chainWorld(owners);
     const seat = (id: string): number => world.sim.state.nations[world.n(id)]!.capital!;
     expect(capitalStars(world.sim, 1)).toEqual([seat('me'), seat('empire')].sort((a, b) => a - b));

@@ -136,9 +136,9 @@ export const REVOLT = {
 
 /** Province militia. */
 export const GARRISON = {
-  BASE_HP: 40, // every province
-  HP_PER_SQRT_MILLION: 25, // + 25 x sqrt(population in millions)
-  MAX_BASE_HP: 240, // cap before multipliers
+  BASE_HP: 15, // every province
+  HP_PER_SQRT_MILLION: 10, // + 25 x sqrt(population in millions)
+  MAX_BASE_HP: 120, // cap before multipliers
   CAPITAL_MULT: 1.5, // original national capitals
   CITY_MULT: 1.2, // provinces with a major city
   REGEN_SHARE_PER_DAY: 0.2, // share of cap regained per day while uncontested, x stability factor
@@ -260,13 +260,13 @@ export const CAPITAL = {
   GARRISON_KEPT: 0.5, // share of each surrendered province's garrison kept
   STOCK_SHARE: 0.5, // share of the loser's Funds and goods the winner takes
   EMPIRE_PROVINCES: 8, // nations this big: world news, capital star at every zoom
-  GUARD_NEED: 2.0, // AI keeps capital defence at 2x the threat
+  GUARD_NEED: 0.8, // AI keeps capital defence at 2x the threat
 } as const;
 
 /** The opening world. */
 export const START = {
   UNITS_BASE: 1, // units = round(base + perSqrtFunds x sqrt(Funds/day))
-  UNITS_PER_SQRT_FUNDS: 0.4, // France 14, USA 20, China 18, Luxembourg 5; world about 1,130
+  UNITS_PER_SQRT_FUNDS: 0.8, // France 14, USA 20, China 18, Luxembourg 5; world about 1,130
   CAPITAL_ARMY_SHARE: 0.5, // share standing in the capital
   MAX_BORDER_ARMIES: 3, // the rest split over up to 3 home provinces with the most foreign neighbours
   MIX_BY_TIER: {
@@ -319,9 +319,9 @@ export const AI = {
   MAX_STAGING_ORDERS: 6, // of which staging moves
   THREAT_HOPS: 2, // threat counts hostile forces within 2 hops
   THREAT_NEAR_WEIGHT: 1, // weight at 1 hop (or inbound)
-  THREAT_FAR_WEIGHT: 0.5, // weight at 2 hops
+  THREAT_FAR_WEIGHT: 0.25, // weight at 2 hops
   THREAT_QUEUED_SHARE: 0.5, // units in hostile training queues within 1 hop count at 50%
-  FRONT_GUARD: 1.1, // frontier province defence need, x threat
+  FRONT_GUARD: 0.35, // frontier province defence need, x threat
   HOLD_GUARD: 0.9, // survivors must reach 0.9 x hostile force within 2 hops of the prize
   DEFENCE_ETA_HOURS: 24, // defenders are pulled from at most 24 h away
   ATTACK_ETA_HOURS: 48, // attackers are gathered from at most 48 h away
@@ -380,9 +380,9 @@ export const AI = {
 
 /** The three difficulties. Rules are symmetric; only the AI and the opening change. */
 export const DIFFICULTY: Readonly<Record<Difficulty, DifficultySpec>> = {
-  relaxed: { label: 'Relaxed', blurb: 'Slower, cautious rivals and a bigger war chest.', aiOutput: 0.85, majorCount: 16, majorThinkHours: 6, attackKeep: 0.55, maxOperations: 2, openingCalmHours: 96, playerGraceDays: 10, playerFundsDays: 12, playerArmyMultiplier: 1.5 }, // learning the game: the benchmark player wins 16-20 of 24
-  standard: { label: 'Standard', blurb: 'A fair world. Playing as well as the advisor wins about half the time.', aiOutput: 1.0, majorCount: 20, majorThinkHours: 4, attackKeep: 0.4, maxOperations: 4, openingCalmHours: 48, playerGraceDays: 5, playerFundsDays: 8, playerArmyMultiplier: 1.2 }, // the benchmark: 10-14 of 24
-  ruthless: { label: 'Ruthless', blurb: 'Richer, bolder rivals who come for you early.', aiOutput: 1.2, majorCount: 24, majorThinkHours: 3, attackKeep: 0.25, maxOperations: 6, openingCalmHours: 24, playerGraceDays: 2, playerFundsDays: 4, playerArmyMultiplier: 1.0 }, // for experts: 3-7 of 24
+  relaxed: { label: 'Relaxed', blurb: 'Slower, cautious rivals and a bigger war chest.', aiOutput: 0.85, majorCount: 16, majorThinkHours: 6, attackKeep: 0.45, maxOperations: 3, openingCalmHours: 96, playerGraceDays: 10, playerFundsDays: 12, playerArmyMultiplier: 1.5 }, // learning the game: the benchmark player wins 16-20 of 24
+  standard: { label: 'Standard', blurb: 'A fair world. Playing as well as the advisor wins about half the time.', aiOutput: 1.0, majorCount: 20, majorThinkHours: 4, attackKeep: 0.3, maxOperations: 6, openingCalmHours: 48, playerGraceDays: 5, playerFundsDays: 8, playerArmyMultiplier: 1.2 }, // the benchmark: 10-14 of 24
+  ruthless: { label: 'Ruthless', blurb: 'Richer, bolder rivals who come for you early.', aiOutput: 1.2, majorCount: 24, majorThinkHours: 3, attackKeep: 0.2, maxOperations: 8, openingCalmHours: 24, playerGraceDays: 2, playerFundsDays: 4, playerArmyMultiplier: 1.0 }, // for experts: 3-7 of 24
 };
 
 /** The advisor, Suggest (A), Attack with..., and Staff (Delegate/Defend stances). */
@@ -390,6 +390,7 @@ export const ADVISOR = {
   ATTACK_KEEP: 0.5, // suggestions keep at least 50% in the mean prediction
   MIN_WIN_CHANCE: 0.8, // and win at least 80% of Monte Carlo samples
   MAX_OPERATIONS: 3, // concurrent Staff operations
+  GUARD_SHARE: 0.3, // the advisor holds provinces to this share of the AI's guard need: the player watches the map and can react
   THINK_HOURS: 4, // Staff thinks for Delegate/Defend armies every 4 h
   SUGGESTIONS: 3, // cards shown per Suggest
   DEFEND_RADIUS_HOURS: 24, // Defend stance moves at most 24 h from its post
@@ -427,6 +428,7 @@ export const RENDER = {
   MAX_ZOOM: 64, // d3-zoom scale extent upper bound
   MAX_CANVAS_PIXELS: 4_000_000, // DPR is capped so no canvas exceeds 4 megapixels
   MAX_DPR: 2, // and never above 2
+  STAR_PROVINCES: 20, // below city-dot zoom, only your capital and those of nations this big get a star (78 nations start with 8+ provinces)
   BATCH_FILLS_BELOW_ZOOM: 3, // below this zoom fills are batched by colour
   PROVINCE_BORDERS_FROM_ZOOM: 2, // internal province borders drawn from this zoom
   CITY_DOTS_FROM_ZOOM: 3, // city dots from this zoom

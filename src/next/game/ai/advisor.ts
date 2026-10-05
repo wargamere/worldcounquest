@@ -33,7 +33,10 @@ export type Suggestion =
 /** The player's view with `pick` deciding which armies the advisor may use. */
 function playerView(sim: Sim, pick: (id: ArmyId) => boolean): NationView {
   const n = sim.state.player;
-  const view = assessNation(sim, n);
+  const assessed = assessNation(sim, n);
+  // Every border faces every neighbour's whole army, so the AI's guard pins all
+  // of a starting player's armies: France could not spare one for Luxembourg.
+  const view = { ...assessed, need: assessed.need.map((v) => v * ADVISOR.GUARD_SHARE) };
   const ids = armiesOf(sim, n)
     .filter((a) => pick(a.id))
     .map((a) => a.id);

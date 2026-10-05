@@ -4,7 +4,7 @@
  * per map mode, the key that says when those fills are stale, the provinces a
  * repaint must cover, nation label points and capital stars.
  */
-import { CAPITAL, RENDER, TIME } from '@/next/game/balance';
+import { RENDER, TIME } from '@/next/game/balance';
 import { ownedProvinces } from '@/next/game/cache';
 import { statusOf } from '@/next/game/province';
 import { asProvince } from '@/next/game/ids';
@@ -175,7 +175,7 @@ export function nationLabels(sim: Sim, g: MapGeometry): NationLabel[] {
 
 /**
  * Capital stars at zoom `k` (§8.8): the player's seat always, empires of at
- * least CAPITAL.EMPIRE_PROVINCES provinces at every zoom, and every other seat
+ * least RENDER.STAR_PROVINCES provinces at every zoom, and every other seat
  * once city dots show.
  */
 export function capitalStars(sim: Sim, k: number): ProvinceIx[] {
@@ -183,7 +183,7 @@ export function capitalStars(sim: Sim, k: number): ProvinceIx[] {
   const all = k >= RENDER.CITY_DOTS_FROM_ZOOM;
   for (const nation of sim.state.nations) {
     if (!nation.alive || nation.capital === null) continue;
-    if (all || nation.isPlayer || ownedProvinces(sim, nation.ix).length >= CAPITAL.EMPIRE_PROVINCES) out.push(nation.capital);
+    if (all || nation.isPlayer || ownedProvinces(sim, nation.ix).length >= RENDER.STAR_PROVINCES) out.push(nation.capital);
   }
   return out.sort((a, b) => a - b);
 }
