@@ -30,6 +30,7 @@ import {
   ownUnitsAt,
   provinceValue,
   provincesWithin,
+  sameOwnRegion,
   softShare,
   strength,
   threatSoft,
@@ -515,9 +516,27 @@ export function candidateTargets(sim: Sim, view: NationView, s: PlannerSettings)
     if (list === undefined) reaching.set(t, [{ army, eta }]);
     else if (!list.some((r) => r.army === army)) list.push({ army, eta });
   };
+  // An army may join an attack on any candidate in reach, not only on the one its
+  // route reaches first (§6.4: the screen counts every available army within
+  // ATTACK_ETA_HOURS). The field gives the exact route to that nearest candidate;
+  // for the others, the straight-line time to an own approach province bounds
+  // the gathering time from below and the nearest ETA bounds the arrival.
   for (const army of armies) {
     const nodes = pathFromField(field, army.at);
-    if (nodes.length > 0) reaches(nodes[nodes.length - 1]!, army, routeTicks(sim, army, nodes), routeTicks(sim, army, nodes.slice(0, -1)));
+    if (nodes.length === 0) continue;
+    const nearest = nodes[nodes.length - 1]!;
+    const eta = routeTicks(sim, army, nodes);
+    reaches(nearest, army, eta, routeTicks(sim, army, nodes.slice(0, -1)));
+    const speed = armySpeedKmh(sim, army);
+    for (const t of targets) {
+      if (t === nearest) continue;
+      let gather = Number.POSITIVE_INFINITY;
+      for (const e of map.edges[t]!) {
+        if (e.to === army.at) gather = 0;
+        else if (state.provinces[e.to]!.owner === n) gather = Math.min(gather, heuristicTicks(sim, army.at, e.to, speed));
+      }
+      if (gather <= reach) reaches(t, army, Math.max(eta, heuristicTicks(sim, army.at, t, speed)), gather);
+    }
   }
   // A guard pinned by the army next door may still strike that army's province.
   for (const army of orderable) {
@@ -707,7 +726,7 @@ export function planStaging(sim: Sim, view: NationView, s: PlannerSettings): Com
     let top = 0;
     for (const f of view.frontier) {
       const score = scoreOf.get(f)!;
-      if (f === army.at || !onBorder(f) || score <= top || etaBound(sim, view, army, f) > reach) continue;
+      if (f === army.at || !onBorder(f) || score <= top || !sameOwnRegion(sim, view, army.at, f) || etaBound(sim, view, army, f) > reach) continue;
       to = f;
       top = score;
     }

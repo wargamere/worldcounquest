@@ -316,8 +316,54 @@ function pressure(view: NationView, p: ProvinceIx): number {
 interface ViewExtras {
   soft: Float64Array;
   hostile: Map<ProvinceIx, Units>;
+  /** Own-territory region of each owned province (-1 elsewhere), labelled on first use. */
+  regions: Int32Array | null;
 }
 const extrasOf = new WeakMap<NationView, ViewExtras>();
+
+/**
+ * Labels the nation's land by own-territory reachability: two owned provinces
+ * share a region when an own-mode route joins them (sea links between owned
+ * provinces included). Ascending province order, so labels are deterministic.
+ */
+function ownRegions(sim: Sim, n: NationIx): Int32Array {
+  const { map, state } = sim;
+  const regions = new Int32Array(map.provinces.length).fill(-1);
+  let next = 0;
+  const stack: ProvinceIx[] = [];
+  for (const start of ownedProvinces(sim, n)) {
+    if (regions[start] !== -1) continue;
+    regions[start] = next;
+    stack.push(start);
+    while (stack.length > 0) {
+      const p = stack.pop()!;
+      for (const e of map.edges[p]!) {
+        if (regions[e.to] !== -1 || state.provinces[e.to]!.owner !== n) continue;
+        regions[e.to] = next;
+        stack.push(e.to);
+      }
+    }
+    next += 1;
+  }
+  return regions;
+}
+
+/**
+ * Whether an own-territory route joins owned provinces `a` and `b`. A move to an
+ * own province with no such route falls back to an attack route through hostile
+ * land, so staging and post returns check this first: an exclave beyond enemy
+ * land is never a destination for a lone army.
+ */
+export function sameOwnRegion(sim: Sim, view: NationView, a: ProvinceIx, b: ProvinceIx): boolean {
+  const extras = extrasOf.get(view);
+  let regions = extras?.regions ?? null;
+  if (regions === null) {
+    regions = ownRegions(sim, view.nation);
+    if (extras !== undefined) extras.regions = regions;
+  }
+  const ra = regions[a] ?? -1;
+  return ra !== -1 && ra === regions[b];
+}
 
 export function threatSoft(view: NationView, p: ProvinceIx): number {
   return extrasOf.get(view)?.soft[p] ?? 1;
@@ -372,6 +418,7 @@ export function assessNation(sim: Sim, n: NationIx): NationView {
   const capital = nation.capital;
   const hostileNeighbour = (p: ProvinceIx): boolean => map.edges[p]!.some((e) => state.provinces[e.to]!.owner !== n);
   const border = ownedProvinces(sim, n).filter(hostileNeighbour);
+  const frontierSet = new Set<ProvinceIx>(border);
   const assessed = new Set<ProvinceIx>(border);
   if (capital !== null) assessed.add(capital);
   for (const army of armiesOf(sim, n)) if (army.alive && army.leg === null && state.provinces[army.at]!.owner === n) assessed.add(army.at);
@@ -385,7 +432,9 @@ export function assessNation(sim: Sim, n: NationIx): NationView {
     soft[p] = softShare(hostile, 0);
     threat[p] = strength(hostile, 0, 'attacker', softShare(own, garrison), terrain, ramparts).f;
     defence[p] = strength(own, garrison, 'defender', soft[p], terrain, ramparts).f;
-    need[p] = needFactor(sim, n, p) * threat[p];
+    // Only the frontier and the capital keep a guard (§6.4): an interior province's
+    // armies are the ones staging and offensives draw on, threat or not.
+    need[p] = p === capital || frontierSet.has(p) ? needFactor(sim, n, p) * threat[p] : 0;
   }
 
   const live = liveOperations(sim, n);
@@ -416,6 +465,6 @@ export function assessNation(sim: Sim, n: NationIx): NationView {
   };
   const ordered = border.filter((p) => p !== capital).sort((x, y) => pressure(view, y) - pressure(view, x) || x - y);
   view.frontier = (capital !== null ? [capital, ...ordered] : ordered).slice(0, AI.MAX_FRONTIER);
-  extrasOf.set(view, { soft, hostile: hostileAt });
+  extrasOf.set(view, { soft, hostile: hostileAt, regions: null });
   return view;
 }

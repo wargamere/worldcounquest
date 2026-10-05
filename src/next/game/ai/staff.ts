@@ -12,7 +12,7 @@ import { hoursToTicks } from '../clock';
 import { isIdle } from '../armies';
 import { UNIT_TYPES } from '../types';
 import type { ArmyId, Command, Sim } from '../types';
-import { assessNation, defenceF, threatSoft, ownUnitsAt, type NationView } from './assess';
+import { assessNation, defenceF, sameOwnRegion, threatSoft, ownUnitsAt, type NationView } from './assess';
 import { advisorSettings, planDefence, planOffensive, planRetreats, planStaging, type PlannerSettings } from './military';
 import { resetCounters, runThink, type AppliedCommand } from './think';
 
@@ -24,7 +24,7 @@ function returnToPosts(sim: Sim, view: NationView, defend: ReadonlySet<ArmyId>, 
   for (const id of [...defend].sort((a, b) => a - b)) {
     const army = armyById(sim, id);
     if (army === undefined || used.has(id) || !isIdle(sim, army) || army.post === null || army.post === army.at) continue;
-    if (state.provinces[army.post]!.owner !== n) continue;
+    if (state.provinces[army.post]!.owner !== n || !sameOwnRegion(sim, view, army.at, army.post)) continue;
     const need = view.need[army.at] ?? 0;
     if (need > 0) {
       const rest = ownUnitsAt(sim, n, army.at);

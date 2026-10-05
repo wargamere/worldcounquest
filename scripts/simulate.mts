@@ -282,11 +282,18 @@ export function runGame(job: Job): GameReport {
       report.upkeepShare.majors = shares.length > 0 ? shares.reduce((a, b) => a + b, 0) / shares.length : null;
     }
   };
+  // state.surrenders records only the player's capitulations (the end screen's list),
+  // so every capitulation is counted here: a nation seated in its original capital
+  // before a tick and dead after it surrendered (an elimination needs a lost seat).
+  let capitulations = 0;
+  const seated = new Uint8Array(state.nations.length);
   for (let i = 0; i < job.days * TIME.TICKS_PER_DAY; i += 1) {
     if (job.player === 'advisor' && isHourStart(sim.state.tick)) autoplay(sim, 'advisor');
+    for (const nation of sim.state.nations) seated[nation.ix] = nation.alive && nation.capital === map.nations[nation.ix]!.capital ? 1 : 0;
     const t0 = performance.now();
     stepTick(sim, hooks);
     tickMs.push(performance.now() - t0);
+    for (const nation of sim.state.nations) if (seated[nation.ix] === 1 && !nation.alive) capitulations += 1;
     battles.afterTick(sim);
     if (sim.state.tick % TIME.TICKS_PER_DAY === 0) sampleDay();
     if (sim.state.status !== 'playing') break;
@@ -298,7 +305,7 @@ export function runGame(job: Job): GameReport {
     const holds = sim.cache.nationProvinces[player]!.length;
     report.lossReason = holds === 0 ? 'last province fell' : 'a rival reached the goal';
   }
-  report.capitulations = end.surrenders.length;
+  report.capitulations = capitulations;
   report.capitulationsToPlayer = end.surrenders.filter((s) => s.winner === player).length;
   const firstWon = end.surrenders.find((s) => s.winner === player);
   report.firstCapitulationWonDay = firstWon === undefined ? null : Math.floor(firstWon.tick / TIME.TICKS_PER_DAY) + 1;

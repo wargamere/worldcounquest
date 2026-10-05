@@ -5,7 +5,7 @@ import { armyById, rebuildArmyIndex } from '../../cache';
 import { hoursToTicks } from '../../clock';
 import { zeroUnits } from '../../keys';
 import { defenceF, provinceValue, threatAt, threatSoft, threatUnitsAt } from '../../ai/assess';
-import { candidateTargets, planDefence, planOffensive, planOperation, planRetreats } from '../../ai/military';
+import { candidateTargets, planDefence, planOffensive, planOperation, planRetreats, planStaging } from '../../ai/military';
 import { thinkNation } from '../../ai/think';
 import { totalHp } from '../../units';
 import { step } from '../steps';
@@ -454,5 +454,91 @@ describe('the guard need', () => {
     expect(view.need[p('f')]).toBeCloseTo(AI.FRONT_GUARD * view.threat[p('f')]!, 9);
     expect(view.frontier[0]).toBe(p('cap'));
     expect(defenceF(sim, p('f'), zeroUnits(), threatSoft(view, p('f')))).toBeCloseTo(view.defence[p('f')]!, 9);
+  });
+});
+
+describe('exclave-staging: no lone march through enemy land to an own exclave', () => {
+  // `excl` is ours but reachable only through bb's `bx`: a move there falls back to
+  // an attack route, so staging must pick the frontier it can reach over own land.
+  // `back` lies three hops from bb, so its army is free under any guard rule.
+  it('stages to the reachable frontier, never to the exclave', () => {
+    const { sim, n, p, a } = tinySim({
+      provinces: {
+        cap: { owner: 'aa', capitalOf: 'aa' },
+        back: { owner: 'aa' },
+        inner: { owner: 'aa' },
+        mid: { owner: 'aa', garrison: 60 },
+        excl: { owner: 'aa', garrison: 0 },
+        bx: { owner: 'bb', capitalOf: 'bb' },
+        me: { owner: 'me' },
+      },
+      edges: [
+        ['cap', 'back'],
+        ['back', 'inner'],
+        ['inner', 'mid'],
+        ['mid', 'bx'],
+        ['bx', 'excl'],
+      ],
+      armies: [
+        { owner: 'aa', at: 'back', units: { rifles: 6 } },
+        { owner: 'bb', at: 'bx', units: { rifles: 10 } },
+      ],
+    });
+    const { view, s } = planning(sim, n('aa'));
+    expect(view.threat[p('back')]).toBe(0);
+    expect(view.threat[p('excl')]! / view.defence[p('excl')]!).toBeGreaterThan(view.threat[p('mid')]! / view.defence[p('mid')]!);
+    const commands = planStaging(sim, view, s);
+    expect(ordersTo(commands, p('excl'))).toBe(false);
+    expect(moves(commands).find((c) => c.to === p('mid'))?.armies).toEqual([a(0)]);
+  });
+});
+
+describe('interior-free: only the frontier and the capital keep a guard', () => {
+  it('pins no army in an interior province, even with hostile armies two hops away', () => {
+    const { sim, n, p, a } = tinySim({
+      provinces: {
+        cap: { owner: 'aa', capitalOf: 'aa' },
+        inner: { owner: 'aa' },
+        mid: { owner: 'aa', garrison: 0 },
+        bx: { owner: 'bb', capitalOf: 'bb' },
+        me: { owner: 'me' },
+      },
+      edges: [
+        ['cap', 'inner'],
+        ['inner', 'mid'],
+        ['mid', 'bx'],
+      ],
+      armies: [
+        { owner: 'aa', at: 'inner', units: { rifles: 6 } },
+        { owner: 'bb', at: 'bx', units: { rifles: 10 } },
+      ],
+    });
+    const { view, s } = planning(sim, n('aa'));
+    expect(view.threat[p('inner')]).toBeGreaterThan(0);
+    expect(view.need[p('inner')]).toBe(0);
+    expect(moves(planStaging(sim, view, s)).find((c) => c.to === p('mid'))?.armies).toEqual([a(0)]);
+  });
+});
+
+describe('screen-every-army: an army counts for every candidate it can reach', () => {
+  it('screens a prize that is not the nearest candidate of any army', () => {
+    const { sim, n, p } = tinySim({
+      provinces: {
+        home: { owner: 'aa', capitalOf: 'aa' },
+        side: { owner: 'aa' },
+        near: { owner: 'bb', garrison: 10 },
+        prize: { owner: 'bb', capitalOf: 'bb', garrison: 10 },
+        me: { owner: 'me' },
+      },
+      edges: [
+        ['home', 'near', 100],
+        ['home', 'side', 100],
+        ['side', 'prize', 100],
+      ],
+      armies: [{ owner: 'aa', at: 'home', units: { rifles: 12 } }],
+    });
+    sim.state.tick = AFTER_CALM;
+    const { view, s } = planning(sim, n('aa'));
+    expect(candidateTargets(sim, view, s)).toContain(p('prize'));
   });
 });
