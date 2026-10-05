@@ -173,39 +173,41 @@ describe('the opening world', () => {
     expect(provinces[lyonLike]!.buildings.training).toBe(1);
   });
 
+  // The opening as tuned after the first balance runs: twice the spec's §3.8 armies
+  // (START.UNITS_PER_SQRT_FUNDS 0.8), because garrisons out-defended every army.
   it('reproduces the worked opening: player France on Standard (§3.8)', () => {
     const sim = realSim({ seed: 'opening' });
     const france = sim.state.player;
     const armies = armiesOf(sim, france);
-    expect(counts(armies)).toEqual({ rifles: 8, hunters: 2, motor: 2, guns: 3, tanks: 2 });
+    expect(counts(armies)).toEqual({ rifles: 16, hunters: 3, motor: 3, guns: 5, tanks: 5 });
     const capital = armies.filter((army) => army.at === map.nations[france]!.capital);
     expect(capital).toHaveLength(1);
-    expect(totalCount(capital[0]!.units)).toBe(9);
+    expect(totalCount(capital[0]!.units)).toBe(18);
     expect(armies.length).toBeLessThanOrEqual(1 + START.MAX_BORDER_ARMIES);
     expect(armies.every((army) => army.stance === 'manual' && army.retreatAt === 0.25)).toBe(true);
     const stocks = sim.state.nations[france]!.stocks;
     expect(Math.round(stocks.funds)).toBe(8545);
     expect(Math.round(stocks.recruits)).toBe(29_920);
-    expect(stocks.oil).toBe(120);
+    expect(stocks.oil).toBe(190);
     expect(stocks.steel).toBeGreaterThanOrEqual(150);
-    expect(nationRates(sim, france).upkeep).toMatchObject({ funds: 92, food: 34, oil: 12 });
+    expect(nationRates(sim, france).upkeep).toMatchObject({ funds: 177, food: 64, oil: 26 });
   });
 
   it('sizes AI nations by Funds per day, guards their capitals to the end, and ranks the majors', () => {
     const sim = realSim({ seed: 'opening' });
     const { state } = sim;
     const germany = map.nationById.get('276')!;
-    expect(counts(armiesOf(sim, germany))).toEqual({ rifles: 7, hunters: 2, motor: 1, guns: 2, tanks: 2 });
+    expect(counts(armiesOf(sim, germany))).toEqual({ rifles: 14, hunters: 3, motor: 3, guns: 4, tanks: 4 });
     const luxembourg = map.nationById.get('442')!;
-    expect(UNIT_TYPES.reduce((sum, type) => sum + counts(armiesOf(sim, luxembourg))[type], 0)).toBe(5);
+    expect(UNIT_TYPES.reduce((sum, type) => sum + counts(armiesOf(sim, luxembourg))[type], 0)).toBe(10);
     for (const nation of state.nations) {
       if (nation.isPlayer) continue;
       const guard = armiesOf(sim, nation.ix).find((army) => army.at === map.nations[nation.ix]!.capital);
       expect(guard?.retreatAt).toBe(0);
     }
     const world = state.armies.reduce((sum, army) => sum + totalCount(army.units), 0);
-    expect(world).toBeGreaterThan(1000);
-    expect(world).toBeLessThan(1300);
+    expect(world).toBeGreaterThan(1900);
+    expect(world).toBeLessThan(2300);
     const majors = state.nations.filter((nation) => !nation.isPlayer && nation.tier === 'major').length;
     expect(majors).toBeGreaterThanOrEqual(DIFFICULTY.standard.majorCount);
     expect(majors).toBeLessThanOrEqual(AI_TIERS.MAX_MAJORS);
@@ -217,8 +219,8 @@ describe('the opening world', () => {
     const ruthless = realSim({ seed: 'opening', difficulty: 'ruthless' });
     const france = relaxed.state.player;
     const units = (sim: typeof relaxed): number => armiesOf(sim, france).reduce((sum, army) => sum + totalCount(army.units), 0);
-    expect(units(relaxed)).toBe(21);
-    expect(units(ruthless)).toBe(14);
+    expect(units(relaxed)).toBe(41);
+    expect(units(ruthless)).toBe(27);
     expect(relaxed.state.nations[france]!.stocks.funds / ruthless.state.nations[france]!.stocks.funds).toBeCloseTo(12 / 4, 9);
   });
 });

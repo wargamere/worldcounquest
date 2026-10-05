@@ -502,7 +502,7 @@ export function candidateTargets(sim: Sim, view: NationView, s: PlannerSettings)
 
   const orderable = orderableArmies(sim, view, ctx, s);
   const armies = orderable.filter((army) => canLeave(sim, view, ctx, army));
-  if (orderable.length === 0 || near.size === 0 || sim.cache.counters.fields >= AI.MAX_FIELDS) return [];
+  if (orderable.length === 0 || near.size === 0 || !targetFieldLeft(sim)) return [];
   const reach = hoursToTicks(AI.ATTACK_ETA_HOURS);
   const targets = [...near].sort((x, y) => x - y);
   // Who can reach what: each army counts for the candidate its own-territory route
@@ -592,7 +592,7 @@ export function planOperation(sim: Sim, view: NationView, s: PlannerSettings, ta
 export function sizeAttack(sim: Sim, view: NationView, s: PlannerSettings, target: ProvinceIx, reachHours: number, hold: boolean): OperationPlan | null {
   const ctx = contextOf(view);
   const n = view.nation;
-  if (sim.cache.counters.fields >= AI.MAX_FIELDS || !predictionsLeft(sim, ctx)) return null;
+  if (!targetFieldLeft(sim) || !predictionsLeft(sim, ctx)) return null;
   const armies = orderableArmies(sim, view, ctx, s).filter((army) => canLeaveWith(sim, view, ctx, army, [], target));
   if (armies.length === 0) return null;
   const fastest = armies.reduce<number>((max, a) => Math.max(max, armySpeedKmh(sim, a)), AI.REFERENCE_SPEED_KMH);
@@ -645,6 +645,16 @@ export function sizeAttack(sim: Sim, view: NationView, s: PlannerSettings, targe
     };
   }
   return null;
+}
+
+/**
+ * Whether another target travel field fits the think's budget. One field is
+ * always kept back for the frontier field, which the view builds lazily on first
+ * use: without the reserve, eight target fields followed by defence or staging
+ * made ten (Brazil, in a 30-day world game).
+ */
+function targetFieldLeft(sim: Sim): boolean {
+  return sim.cache.counters.fields < AI.MAX_FIELDS - 1;
 }
 
 /** Whether `army` may join an order with `picks` and still leave its province guarded. */

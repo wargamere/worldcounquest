@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ECONOMY, MAP } from '../balance';
+import { ECONOMY, GARRISON, MAP } from '../balance';
 import { asProvince } from '../ids';
 import type { CountrySeed, GoodOverride, ProvinceFact, ProvinceFacts, Terrain, TerrainOverride } from '../types';
 import { buildMap, chordKm, connectedComponents, countryGraph, edgeBetween, goodsScale, parseFacts } from '../world';
@@ -221,8 +221,8 @@ describe('the real map', () => {
     if (!paris || !fact) throw new Error('no Paris');
     expect(paris.vp).toBe(1 + 2 + 3);
     expect(paris.recruitsBase).toBeCloseTo(fact.population * ECONOMY.RECRUITS_PER_PERSON, 9);
-    const militia = Math.min(40 + 25 * Math.sqrt(fact.population / 1e6), 240);
-    expect(paris.garrisonBase).toBeCloseTo(militia * 1.5 * 1.2, 9);
+    const militia = Math.min(GARRISON.BASE_HP + GARRISON.HP_PER_SQRT_MILLION * Math.sqrt(fact.population / 1e6), GARRISON.MAX_BASE_HP);
+    expect(paris.garrisonBase).toBeCloseTo(militia * GARRISON.CAPITAL_MULT * GARRISON.CITY_MULT, 9);
     const france = map.nations[paris.country];
     expect(paris.goodsBase).toBeCloseTo(
       ECONOMY.GOODS_BASE.steel * 1 * goodsScale(fact.population, fact.areaKm2) * (ECONOMY.GOODS_TIER[france?.tier ?? 0] ?? 0),
