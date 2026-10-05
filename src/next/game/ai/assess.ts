@@ -9,7 +9,7 @@
  * inbound, THREAT_FAR_WEIGHT at two), plus a share of the units in hostile
  * training queues next door. The AI ignores fog (§6.1).
  */
-import { AI, CAPITAL, COMBAT, EFFECTS, GARRISON, TERRAIN, UNITS } from '../balance';
+import { ADVISOR, AI, CAPITAL, COMBAT, EFFECTS, GARRISON, TERRAIN, UNITS } from '../balance';
 import { armiesAt, armiesOf, armyById, inboundTo, ownedProvinces } from '../cache';
 import { capitulatesOnCapture } from '../capture';
 import { hoursToTicks } from '../clock';
@@ -466,5 +466,18 @@ export function assessNation(sim: Sim, n: NationIx): NationView {
   const ordered = border.filter((p) => p !== capital).sort((x, y) => pressure(view, y) - pressure(view, x) || x - y);
   view.frontier = (capital !== null ? [capital, ...ordered] : ordered).slice(0, AI.MAX_FRONTIER);
   extrasOf.set(view, { soft, hostile: hostileAt, regions: null });
+  return view;
+}
+
+/**
+ * The player's assessment, as the advisor and Staff use it: the AI's, with the
+ * guard need scaled by ADVISOR.GUARD_SHARE. Every border faces every
+ * neighbour's whole army, so the AI's need pinned all of a starting player's
+ * armies at home: France could not spare one for Luxembourg, and a player who
+ * delegated everything captured nothing in 120 days.
+ */
+export function assessPlayer(sim: Sim): NationView {
+  const view = assessNation(sim, sim.state.player);
+  for (let p = 0; p < view.need.length; p += 1) view.need[p] = (view.need[p] ?? 0) * ADVISOR.GUARD_SHARE;
   return view;
 }

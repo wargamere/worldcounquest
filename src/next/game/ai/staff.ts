@@ -12,7 +12,7 @@ import { hoursToTicks } from '../clock';
 import { isIdle } from '../armies';
 import { UNIT_TYPES } from '../types';
 import type { ArmyId, Command, Sim } from '../types';
-import { assessNation, defenceF, sameOwnRegion, threatSoft, ownUnitsAt, type NationView } from './assess';
+import { assessPlayer, defenceF, sameOwnRegion, threatSoft, ownUnitsAt, type NationView } from './assess';
 import { advisorSettings, planDefence, planOffensive, planRetreats, planStaging, type PlannerSettings } from './military';
 import { resetCounters, runThink, type AppliedCommand } from './think';
 
@@ -60,7 +60,7 @@ export function runStaff(sim: Sim): AppliedCommand[] {
   }
   if (delegate.size === 0 && defend.size === 0) return [];
   resetCounters(sim);
-  const view = assessNation(sim, state.player);
+  const view = assessPlayer(sim);
   const guard: PlannerSettings = { ...advisorSettings(defend), attack: false, defendRadiusTicks: hoursToTicks(ADVISOR.DEFEND_RADIUS_HOURS) };
   const field = advisorSettings(delegate);
   const commands: Command[] = [...planDefence(sim, view, guard), ...planDefence(sim, view, field), ...planRetreats(sim, view)];

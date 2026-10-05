@@ -921,9 +921,10 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
     },
 
     focusHome() {
-      const sim = currentSim();
-      if (sim === null) return;
-      get().focusProvinces(ownedProvinces(sim, sim.state.player));
+      // The map frames the land joined to the capital, not every owned province:
+      // all of France includes French Guiana and framed the Atlantic.
+      mapHandle?.home();
+      wake();
     },
 
     focusCapital() {

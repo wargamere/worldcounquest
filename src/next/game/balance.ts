@@ -380,16 +380,16 @@ export const AI = {
 
 /** The three difficulties. Rules are symmetric; only the AI and the opening change. */
 export const DIFFICULTY: Readonly<Record<Difficulty, DifficultySpec>> = {
-  relaxed: { label: 'Relaxed', blurb: 'Slower, cautious rivals and a bigger war chest.', aiOutput: 0.85, majorCount: 16, majorThinkHours: 6, attackKeep: 0.45, maxOperations: 3, openingCalmHours: 96, playerGraceDays: 10, playerFundsDays: 12, playerArmyMultiplier: 1.5 }, // learning the game: the benchmark player wins 16-20 of 24
-  standard: { label: 'Standard', blurb: 'A fair world. Playing as well as the advisor wins about half the time.', aiOutput: 1.0, majorCount: 20, majorThinkHours: 4, attackKeep: 0.3, maxOperations: 6, openingCalmHours: 48, playerGraceDays: 5, playerFundsDays: 8, playerArmyMultiplier: 1.2 }, // the benchmark: 10-14 of 24
-  ruthless: { label: 'Ruthless', blurb: 'Richer, bolder rivals who come for you early.', aiOutput: 1.2, majorCount: 24, majorThinkHours: 3, attackKeep: 0.2, maxOperations: 8, openingCalmHours: 24, playerGraceDays: 2, playerFundsDays: 4, playerArmyMultiplier: 1.0 }, // for experts: 3-7 of 24
+  relaxed: { label: 'Relaxed', blurb: 'Slower, cautious rivals and a bigger war chest.', aiOutput: 0.85, majorCount: 16, majorThinkHours: 6, attackKeep: 0.45, maxOperations: 3, openingCalmHours: 96, playerGraceDays: 10, playerFundsDays: 12, playerArmyMultiplier: 1.5 }, // learning the game (spec target: the advisor player wins 16-20 of 24; not yet met)
+  standard: { label: 'Standard', blurb: 'A fair world. Rivals grow into empires and come for you once you look weak.', aiOutput: 1.0, majorCount: 20, majorThinkHours: 4, attackKeep: 0.3, maxOperations: 6, openingCalmHours: 48, playerGraceDays: 5, playerFundsDays: 8, playerArmyMultiplier: 1.2 }, // the benchmark (spec target 10-14 of 24; not yet met)
+  ruthless: { label: 'Ruthless', blurb: 'Richer, bolder rivals who come for you early.', aiOutput: 1.2, majorCount: 24, majorThinkHours: 3, attackKeep: 0.2, maxOperations: 8, openingCalmHours: 24, playerGraceDays: 2, playerFundsDays: 4, playerArmyMultiplier: 1.0 }, // for experts (spec target 3-7 of 24; not yet met)
 };
 
 /** The advisor, Suggest (A), Attack with..., and Staff (Delegate/Defend stances). */
 export const ADVISOR = {
-  ATTACK_KEEP: 0.5, // suggestions keep at least 50% in the mean prediction
-  MIN_WIN_CHANCE: 0.8, // and win at least 80% of Monte Carlo samples
-  MAX_OPERATIONS: 3, // concurrent Staff operations
+  ATTACK_KEEP: 0.35, // suggestions keep at least 35% in the mean prediction
+  MIN_WIN_CHANCE: 0.7, // and win at least 70% of Monte Carlo samples
+  MAX_OPERATIONS: 6, // concurrent Staff operations
   GUARD_SHARE: 0.3, // the advisor holds provinces to this share of the AI's guard need: the player watches the map and can react
   THINK_HOURS: 4, // Staff thinks for Delegate/Defend armies every 4 h
   SUGGESTIONS: 3, // cards shown per Suggest
