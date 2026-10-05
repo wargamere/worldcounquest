@@ -1,13 +1,15 @@
 # Hegemon
 
-A browser nation-conquest strategy game. Pick any of 175 countries on the world
-map, run its economy, raise an army, and take your neighbours until you hold 60%
-of the world. Single-player, no backend — the game autosaves to `localStorage`.
+A real-time browser strategy game on a map of 1,487 provinces. Pick any of 175
+nations, run its economy, raise armies and march them across the world until you
+hold half of the world's victory points. Single-player, no backend: the game
+autosaves to `localStorage`.
 
 **Play it:** https://wargamere.github.io/worldcounquest/
 
-Original work. Not affiliated with, and sharing no code or assets with, any
-existing game.
+Original work. The mechanics are inspired by the real-time grand-strategy genre,
+but no name, unit, building, text or asset is copied from any existing game. The
+only data source is Natural Earth, which is public domain.
 
 ## Running it
 
@@ -23,195 +25,140 @@ npm run dev      # http://localhost:3000
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | Vitest, one pass |
-| `npm run test:watch` | Vitest, watch mode |
+| `npm run sim -- --difficulty standard --days 120` | Balance harness: whole headless games, reported as a table |
+| `npm run bench` | Simulation cost per tick and per AI think |
+| `npm run build:provinces` | Rebuild the province map from Natural Earth (about 3 minutes) |
 
 ## How it plays
 
-One turn is one month: your income lands, you act, then every AI nation acts in
-one batch. Actions cost money and manpower, never an action counter.
+**Time runs.** At 1× one game hour passes per real second, so a game day takes
+24 s; 2×, 4× and 8× speed it up, and Space pauses. Every order works while the
+game is paused. The game starts paused, and it also pauses when you switch tabs.
 
-- **Invest** — raise a country's development by one level: more income, and 10%
-  more combat strength there. Cost scales with the current level; the panel shows
-  the payback time.
-- **Recruit** — troops cost money *and* draw on a national manpower pool that
-  regenerates at 0.2% of your population per month and banks up to a year.
-- **Move** — free between adjacent countries you own. Each garrison moves or
-  attacks once per turn.
-- **Attack** — an adjacent enemy. Committed troops either take the territory or
-  die there.
-- **Combined assault** — attack one enemy from several of your bordering
-  countries at once, as a single battle. Each contributor uses its action; the
-  attacking development is the troop-weighted average. This is how armed borders
-  break: a country pinned by a big neighbour can spare little alone, but three
-  together often can. In one stalled game only 4 of 24 border targets were
-  winnable from any single country — and 12 once neighbours could combine.
+**Provinces.** Each of the 175 nations is split into provinces: Russia has 68,
+the United States 51, China 51, France 13, Luxembourg 1. Each province has:
+- a terrain type (plains, hills, mountains, desert, jungle, arctic, urban), which
+  shapes movement and combat;
+- one good it produces (Food, Steel or Oil);
+- a militia garrison;
+- a stability level;
+- its own buildings.
 
-- **Capitals** — every nation's capital is the country it started from, marked
-  ★ on the map. Take an AI nation's capital and the whole nation capitulates to
-  you: every country it still holds changes hands at once, garrisons halved. AI
-  powers weigh a capital at its whole empire's income, so they hunt each other's
-  and guard their own at a fraction of their usual risk. Yours can fall without
-  ending the war — your government flees and you fight on — since the rules say
-  you lose only with your last country.
+Land you take stays *Occupied*, paying half until its original nation is gone and
+it integrates. Take an AI nation's capital and the whole nation capitulates to
+you.
 
-You win at 60% of the world. You lose if your last country falls, **or if a rival
-reaches 60% first**.
+**The economy.** People pay *Funds* and supply *Recruits*. Land yields *Food*,
+*Steel* or *Oil*. Armies cost all of them and eat Food every day. When a stock
+runs out, troops lose strength or slow down.
 
-### Playing it
+There are five buildings:
+- **Works** (shown as Farms, Mines or Oil Wells, by the province's good)
+- **Training Ground**
+- **Ramparts**
+- **Roads**
+- **Draft Office**
 
-Select one of your countries (gold). Neighbours you can attack are outlined red,
-your own you can move into blue; click one to set up the order. Before you commit,
-the order panel shows:
+**The Exchange** is a world market whose prices move with demand. It can keep a
+stock topped up for you automatically.
 
-- your **exact chance to capture** — computed in closed form from the combat
-  formula, not estimated;
-- how many troops would **hold** it if you win;
-- the chance your **source falls** next turn with what you leave behind;
-- the chance the prize is **retaken** straight away.
+**Armies.** There are five land units: Rifles, Tank Hunters, Motor Rifles, Field
+Guns and Tanks. Armies march along province routes at the pace of their slowest
+unit. They can be merged and split.
 
-The default force is the one a careful commander would send: it wins, keeps home
-safe, and leaves enough behind to hold what it takes. Presets jump to a near-sure
-win, a likely win, everything home can spare, or everything. Under *Join the
-assault*, tick your other countries that border the target to add their spare
-troops; the odds update as you do, and joiners are outlined on the map. Clicking
-an enemy country offers a one-click *Combined assault* from every bordering
-country that can spare troops.
+You can send any number of armies, from anywhere, at the same target:
+- **Arrive together** times their departures so they all reach the target in the
+  same hour.
+- Attacking from more than one direction widens your frontage and adds damage.
+- **Attack with…** picks the fewest armies that win.
 
-**Advise** (`A`) suggests the best attack that is both likely to win and safe to
-launch — from one country, or combined from several; when there is none, it
-suggests the most useful troop movement. It uses
-the AI's own planner, so it never walks you into a trap — and it will not win the
-game for you: breaking an armed border takes your own judgement. **Follow all**
-(`F`) carries out every attack and move the advisor would suggest this turn, one
-after another, and reports how it went. Recruiting and investing stay with you.
-It exists for the part of a war that is already won: past about 40 countries a
-player following the advisor spent 10–25 clicks a turn on orders they had no
-reason to question.
+Battles are fought in hourly rounds. The order sheet shows the odds before you
+commit. They come from the same round function the game resolves battles with.
 
-Countries likely to fall next turn are outlined solid red. A turn report tells you
-what you lost while the world moved, and which empires capitulated. `Enter` ends the turn, `Esc` cancels, `H`
-frames your nation, `N` selects the next country that can still act (most
-endangered first), `Z` undoes a recruit, investment or move, `?` opens the rules.
-Attacks cannot be undone — rewinding a lost battle and retrying would reroll the
-dice. Hovering an enemy while one of your countries is selected shows the odds
-from it; the recruit button shows your net income after the purchase.
+**The AI** is 175 nations thinking in real time on a staggered schedule. Each one
+builds, trains, trades, defends its borders and runs multi-army operations.
+**Suggest** (A) runs the same planner for you. Armies set to *Delegate* are run
+by your Staff.
 
-*Great powers* charts countries held over time for you and the three leading
-rivals against the number that wins, above the standings table.
-
-Combat writes its numbers into the event log (`A 69.3` against `D 14.8`, and the
-survivors) so the balance can be debugged from a real game rather than guessed at.
+You win at 50% of world VP (1,534 of 3,068). You lose if an AI gets there first,
+or when your last province falls.
 
 ## Architecture
 
-- `src/game/` — all game rules, as **pure functions**. No React, no Next, no
-  store imports. ESLint enforces this with a `no-restricted-imports` zone on the
-  directory, so the rules stay testable in plain Node. Includes the odds and
-  threat maths (`combat.ts`, `threat.ts`), capitals and capitulation
-  (`capitulation.ts`), the order previews the panel shows (`orders.ts`), and the
-  advisor, which is the AI planner run for the player.
-- `src/game/balance.ts` — every tunable number, in one file. Rebalance here.
-- `src/data/` — hand-authored game data: `countries.seed.json` (population and
-  economy tier per country) and `sea-links.json` (crossings the land-border graph
-  cannot know about, like Dover and the Korea Strait). Authored content, not
-  derived output.
-- `src/lib/world.ts` — loads the TopoJSON and derives the adjacency graph.
-- `src/store/` — Zustand. A thin shell that calls into `src/game`.
-- `src/components/` — rendering only.
+The game lives in `src/next/`. It was built alongside the turn-based version,
+which is still in `src/game`, `src/lib`, `src/store` and `src/components` but is
+no longer mounted (see "Legacy code" below).
 
-### The world
+- `src/next/game/`: every rule, as plain deterministic TypeScript.
+  - No React, DOM, timers, `Date` or `Math.random`.
+  - Lint also bans the non-portable maths functions, so a seed plus a command log
+    replays byte for byte on any JavaScript engine.
+  - `types.ts` is the shared contract.
+  - `balance.ts` holds every tunable number.
+  - `ai/` holds the AI, the advisor and Staff.
+- `src/next/store/`:
+  - the `requestAnimationFrame` loop, with a fixed 15-minute game tick and a
+    per-frame time budget;
+  - the session;
+  - persistence: rotating save slots, a guard against two open tabs, and a purge
+    of saves from older versions;
+  - the Zustand store.
+- `src/next/lib/` and `src/next/components/map/`: the Canvas 2D map.
+  - Province paths are projected once.
+  - Fills are batched by colour at low zoom.
+  - Nation borders are rebuilt from a precomputed table of which provinces lie on
+    each side of every border.
+  - Only changed areas are repainted, and army markers are drawn on an overlay
+    layer.
+- `src/next/components/`: the HUD, panels, feed, phone and desktop layouts,
+  onboarding coach, start and end screens.
 
-Territories come from world-atlas `countries-110m`, vendored into `public/` so
-nothing is fetched from a CDN at runtime. The file's actual shape was inspected
-rather than assumed, and it holds two surprises worth knowing:
+### The province map
 
-- `id` is a **zero-padded string** (`"826"`), not a number.
-- Three geometries — N. Cyprus, Somaliland and Kosovo — ship with **no `id` at
-  all**. They are assigned ids in the `9xx` private-use range so every territory
-  has a stable key.
+`scripts/build-provinces.mts` turns Natural Earth's 10m admin-1 units and
+populated places (at a pinned commit) into `public/provinces.json` (the TopoJSON
+the map draws) and `public/province-facts.json` (what the game reads). The steps:
 
-Antarctica and the French Southern and Antarctic Lands are excluded, leaving 175
-playable countries. Land borders come from `topojson.neighbors()`; sea links are
-layered on top from `src/data/sea-links.json`.
-
-### AI
-
-Every country is its own nation, so conquest is continuous rather than gated
-behind a handful of great powers. To keep 175 nations from scrambling the map and
-flooding the log, the AI runs in two tiers: **majors** (the strongest ~20, plus
-anyone who grows past a country-count or income threshold) and **minors**, which
-hold a size-proportionate garrison and only take near-certain wins.
-
-A major power, each turn: invests, recruits where the threat or the opportunity
-is, attacks — alone or in a combined assault — then moves spare troops toward
-threatened or active borders. An
-attack is only made if the force it needs leaves the source safe, and is sized so
-the survivors can hold what they take.
-
-Those rules exist because each one fixed a failure found by simulating whole games
-(each has a regression test):
-
-| Symptom | Cause |
-| --- | --- |
-| Belgium owned the UK in month two | Attacks committed most of a stack without checking what was left at home |
-| The map froze solid by year five | The AI compared raw troop counts, so every border settled at parity |
-| No nation ever attacked from its homeland | It reinforced before attacking, and moving out uses up a country's action |
-| The US sat 1,637 troops next to Panama for years | Attacks were capped at a size too small to hold the prize, so were never made |
-| China fell to Vietnam in year one | Threat counted only the strongest neighbour; China has fourteen |
-| France's homeland fell in month one | Threat ignored that enemies recruit before they attack |
-
-Threat is **combined** across every enemy neighbour (1 − Π(1 − pᵢ)) and assumes
-each enemy commits part of its standing troops plus part of what it can afford to
-recruit first. How paranoid that estimate is (`THREAT_COMMIT_SHARE`,
-`THREAT_RESERVE_SHARE`) is the single biggest lever on the pace of the world:
-too high and every border is an armed standoff, too low and one empire eats the
-planet in five years.
+1. Each unit joins one of the 175 countries by majority vote of its centroids.
+   Microstates within 200 km fold into their neighbour, and remote territories
+   stay off the map.
+2. Each country's units merge greedily, smallest into smallest neighbour, down to
+   `round(√area / 60)` provinces, each at least 2,500 km².
+3. Each province gets an anchor point, its largest city, a population share, a
+   terrain class from Natural Earth geography regions, a good, and its
+   neighbours, including 101 sea crossings.
+4. The build is reproducible byte for byte.
 
 ### Balance
 
-Tuned by simulating full games with a scripted player that does exactly what the
-advisor suggests every turn — a competent, careful player — across eight starting
-nations and three random seeds, 24 games per difficulty:
+Tuned with `npm run sim` (whole headless games). The first pass froze the world:
+province garrisons outweighed every army, and every border counted every
+neighbour's whole army as a threat. The fixes were lighter garrisons, starting
+armies twice as large, looser AI guards, and a relaxed guard for the player's
+advisor.
 
-| Difficulty | That player wins | Median winning turn | Before capitals |
-| --- | --- | --- | --- |
-| Relaxed | 17 of 24 | 35 | 15 of 24, turn 41 |
-| Standard | 14 of 24 | 34 | 14 of 24, turn 47 |
-| Ruthless | 3 of 24 | 26 | 3 of 24, turn 45 |
+Over 120 days, with the advisor playing 8 starting nations on each difficulty:
+- 13–20 battles a day worldwide;
+- 89–124 nations still alive at day 90;
+- the largest AI nation at 5–20% of world VP.
 
-Capitulation left the odds where they were and took about a quarter off a won
-game: it ends the mop-up, but it speeds up rival empires just as much, so on
-Ruthless a rival reaches hegemony sooner too. Its two knobs are `CAPITAL` in
-`balance.ts`: how much of a surrendering army changes sides, and how tightly AI
-nations guard their capitals.
-
-The rules give the player no action counter: they can act from every
-country every turn, while AI great powers are capped per turn. So difficulty comes
-from the AI: its income, its caution, its attacks per turn, and the player's
-opening war chest. On Standard, playing as well as the advisor wins about half the
-time; beating it reliably means taking the risks the advisor will not.
-
-The event log is filtered to events involving you, your neighbours, or a major
-power, with the full log behind a toggle. Only the player's purchases are logged,
-so battles are never crowded out.
+**Not yet met:** the spec's targets for how often an advisor-driven player wins.
+In those runs it captures early and wins capitulations, but overextends and loses
+ground, and it had not won a game by day 120.
 
 ### Map colours
 
 AI nations use the validated dark-mode steps of the reference data-viz palette,
-minus yellow, which is reserved so the player's gold is unique. Gold separates
-from every AI colour (worst colour-blind ΔE 17.5 on the ocean surface).
+minus yellow, which is reserved so the player's gold is unique. Colours are
+assigned by constrained graph colouring on the country graph, so no two
+neighbouring nations ever share a colour.
 
-Seven hues cannot all be told apart pairwise, and on this map no colouring can
-keep every failing pair apart; an exhaustive search proves it. So colours are
-assigned by constrained graph colouring: **no two neighbours ever share a
-colour**, and pairs the validator flags are kept apart where possible, normal-vision
-failures first. About 5% of borders still carry a weak pair (e.g. blue beside
-violet). Every border between two nations is drawn as a line, which is the
-secondary encoding there, and the tooltip names the owner.
+## Legacy code
 
-Labels and camera framing use each country's largest polygon rather than the
-whole feature: France's full centroid is pulled out to sea by French Guiana, and
-the United States' toward Alaska.
+The turn-based game (`src/game`, `src/lib`, `src/store`, `src/components`,
+`public/countries-110m.json`) still compiles and its tests still pass, but the
+page no longer mounts it. It is kept only until its removal is approved; the new
+game imports nothing from it.
 
 ## Pinned toolchain
 
@@ -226,12 +173,12 @@ the newest published release:
 
 ## Deployment
 
-`.github/workflows/deploy.yml` lints, typechecks, tests, then builds a static
-export and publishes it to GitHub Pages on every push to `main`. A project site is
-served from `/<repo>`, so the build takes its `basePath` from the Pages action
-rather than hard-coding it.
+`.github/workflows/ci.yml` lints, typechecks, tests and builds every pull request.
+`.github/workflows/deploy.yml` does the same and publishes the static export to
+GitHub Pages on every push to `main`. A project site is served from `/<repo>`, so
+the build takes its `basePath` from the Pages action rather than hard-coding it.
 
-## Not in the alpha
+## Not in scope
 
-Multiplayer, diplomacy, tech trees, naval or air unit types, historical scenarios,
-sound, sprite animation, accounts, any database.
+Multiplayer, diplomacy, research and tech trees, naval or air units, historical
+scenarios, sound, sprite animation, accounts, any database.

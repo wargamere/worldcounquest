@@ -9,3 +9,32 @@ html,
 body {
   height: 100%;
 }
+
+body {
+  overscroll-behavior: none;
+}
+
+/* The onboarding coach rings the control a step points at (§8.7). */
+.coach-ring {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+  border-radius: 6px;
+  animation: coach-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes coach-pulse {
+  50% {
+    outline-color: rgba(251, 191, 36, 0.35);
+  }
+}
+
+:root[data-reduce-motion='true'] .coach-ring,
+:root[data-reduce-motion='true'] .animate-pulse {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-ring {
+    animation: none;
+  }
+}

@@ -27,3 +27,6 @@ next-env.d.ts
 
 # static export output
 /out
+
+# downloaded source data for scripts/
+/.cache
