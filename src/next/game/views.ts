@@ -163,14 +163,16 @@ export function hudView(sim: Sim, showAll: boolean): HudView {
   const rates = nationRates(sim, n);
   const chips: StockChip[] = STOCK_KEYS.map((key) => {
     const amount = nation.stocks[key];
-    const net = rates.net[key];
+    const cap = key === 'recruits' ? recruitCap(sim, n) : null;
+    // A full pool does not grow (the cap falls with lost land, so it can sit above it).
+    const net = cap !== null && amount >= cap ? Math.min(0, rates.net[key]) : rates.net[key];
     return {
       key,
       amount,
       netPerDay: net,
       daysLeft: key === 'recruits' ? null : daysLeft(amount, net),
       short: key === 'recruits' ? false : nation.shortage[key],
-      cap: key === 'recruits' ? recruitCap(sim, n) : null,
+      cap,
       auto: isGood(key) && (nation.trade.keepDays[key] > 0 || nation.trade.sellAboveDays[key] > 0),
     };
   });

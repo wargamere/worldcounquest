@@ -34,7 +34,7 @@ export function HoverTooltip() {
   }, []);
   const view = useSimView(useCallback((sim: Sim) => (hover === null ? null : tooltipView(sim, hover, showAll)), [hover, showAll]));
   return (
-    <div ref={box} className={`pointer-events-none absolute left-0 top-0 z-20 max-w-[16rem] rounded border border-slate-700 bg-slate-950/95 px-2 py-1.5 text-[11px] text-slate-300 shadow-lg ${view === null ? 'hidden' : ''}`}>
+    <div ref={box} className={`pointer-events-none absolute left-0 top-0 z-30 max-w-[16rem] rounded border border-slate-700 bg-slate-950/95 px-2 py-1.5 text-[11px] text-slate-300 shadow-lg ${view === null ? 'hidden' : ''}`}>
       {view !== null && <TooltipBody view={view} />}
       {view !== null && preview !== null && preview.to === hover && (
         <div className="mt-1 flex items-center gap-1.5 border-t border-slate-800 pt-1">

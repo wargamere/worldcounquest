@@ -38,10 +38,15 @@ export function whole(value: number): string {
   return Math.round(value).toLocaleString('en-US');
 }
 
+/** A signed amount on the compact scale: "+976", "−12", "+12k". */
+export function signedCompact(value: number): string {
+  const sign = value > 0.5 ? '+' : value < -0.5 ? '−' : '';
+  return `${sign}${compact(Math.abs(value))}`;
+}
+
 /** A per-day rate: "+976/d", "−12/d", compact above ten thousand. */
 export function formatRate(perDay: number): string {
-  const sign = perDay > 0.5 ? '+' : perDay < -0.5 ? '−' : '';
-  return `${sign}${compact(Math.abs(perDay))}/d`;
+  return `${signedCompact(perDay)}/d`;
 }
 
 /** Days as the chips say them: "1d 6h", "9h", "12d". */

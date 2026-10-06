@@ -41,20 +41,23 @@ export function Coach({ phone = false }: { phone?: boolean }) {
     act().clickProvince(p, false);
     act().focusProvinces([p]);
   };
+  // The phone is tapped, the desktop clicked.
+  const tap = phone ? 'tap' : 'click';
+  const Tap = phone ? 'Tap' : 'Click';
   let title = '';
   let body = '';
   let action: { label: string; run: () => void } | null = null;
   switch (step) {
     case 1:
       title = `You are ${hints.nation}.`;
-      body = `Your armies are the gold-outlined markers — tap ${hints.firstArmy ?? 'one of them'}.`;
+      body = `Your armies are the gold-outlined markers — ${tap} ${hints.firstArmy ?? 'one of them'}.`;
       break;
     case 2:
       title = 'Pick a target.';
       body =
         hints.targetName === null
-          ? 'Tap a neighbouring province, then Attack. The sheet shows the odds before you commit.'
-          : `${hints.targetName} is weak and next to you. Tap it with your army selected, then press Attack.${target !== null && target.armies.length >= 2 ? ' Both armies arrive together from two directions: +flank.' : ''}`;
+          ? `${Tap} a neighbouring province, then Attack. The sheet shows the odds before you commit.`
+          : `${hints.targetName} is weak and next to you. ${Tap} it with your army selected, then press Attack.${target !== null && target.armies.length >= 2 ? ' Both armies arrive together from two directions: +flank.' : ''}`;
       if (target !== null) action = { label: 'Show', run: () => act().focusProvinces([target.target]) };
       break;
     case 3:

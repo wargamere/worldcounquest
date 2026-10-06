@@ -135,7 +135,7 @@ export function StartScreen() {
           {DIFFICULTIES.map((d) => (
             <button key={d} type="button" onClick={() => setDifficulty(d)} aria-pressed={difficulty === d} className={`rounded border px-2 py-2 text-left ${difficulty === d ? 'border-amber-500 bg-amber-500/10' : 'border-slate-800 hover:border-slate-600'}`}>
               <span className="block text-sm font-medium text-slate-100">{DIFFICULTY[d].label}</span>
-              <span className="text-[11px] text-slate-500">{DIFFICULTY[d].blurb}</span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">{DIFFICULTY[d].blurb}</span>
             </button>
           ))}
         </div>

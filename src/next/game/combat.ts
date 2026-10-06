@@ -547,7 +547,7 @@ function fight(sim: Sim, p: ProvinceIx): void {
     pushFeed(sim, {
       kind: 'retreated',
       severity: army.owner === player ? 'bad' : owner === player ? 'good' : 'info',
-      text: `${army.name} fell back from ${feedName(sim, p)}`,
+      text: `${army.owner === player ? '' : `${sim.map.nations[army.owner]!.name}'s `}${army.name} fell back from ${feedName(sim, p)}`,
       nations: [army.owner, owner],
       province: p,
       army: army.id,

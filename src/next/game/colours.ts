@@ -1,3 +1,5 @@
+import type { NationIx, Sim } from './types';
+
 /** Country id → adjacent country ids, as `countryGraph(map)` derives them from province edges. */
 type Adjacency = Readonly<Record<string, readonly string[]>>;
 
@@ -135,4 +137,53 @@ function cheapest(colours: Record<string, string>, adjacency: Adjacency, id: str
     }
   }
   return best;
+}
+
+/**
+ * Conquest brings nations into contact that never bordered at the start, and
+ * with seven colours some of them share one: two empires would then read as one
+ * blob. Run in the tick ownership changed; for each such pair the smaller nation
+ * takes the cheapest colour none of its neighbours wears, if one exists. A pure
+ * function of the saved state that leaves a nation alone once it has no twin
+ * next door, so a replay or a loaded game recolours exactly as the original.
+ */
+export function separateColours(sim: Sim): void {
+  const { map, state } = sim;
+  for (let p = 0; p < map.provinces.length; p += 1) {
+    const a = state.provinces[p]!.owner;
+    for (const edge of map.edges[p]!) {
+      const b = state.provinces[edge.to]!.owner;
+      if (b <= a || state.nations[a]!.colour !== state.nations[b]!.colour) continue;
+      recolour(sim, smaller(sim, a, b));
+    }
+  }
+}
+
+function smaller(sim: Sim, a: NationIx, b: NationIx): NationIx {
+  const size = (n: NationIx): number => sim.cache.nationProvinces[n]?.length ?? 0;
+  if (size(a) !== size(b)) return size(a) < size(b) ? a : b;
+  return a > b ? a : b;
+}
+
+function recolour(sim: Sim, n: NationIx): void {
+  const { map, state, cache } = sim;
+  if (state.nations[n]!.isPlayer) return;
+  const around = new Set<NationIx>();
+  for (const p of cache.nationProvinces[n] ?? []) {
+    for (const edge of map.edges[p]!) {
+      const owner = state.provinces[edge.to]!.owner;
+      if (owner !== n) around.add(owner);
+    }
+  }
+  let best: string | null = null;
+  let bestCost = Number.POSITIVE_INFINITY;
+  for (const colour of PALETTE) {
+    let cost = 0;
+    for (const o of around) cost += borderCost(colour, state.nations[o]!.colour);
+    if (cost < bestCost) {
+      best = colour;
+      bestCost = cost;
+    }
+  }
+  if (best !== null) state.nations[n]!.colour = best;
 }

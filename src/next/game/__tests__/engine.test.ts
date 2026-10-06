@@ -115,6 +115,14 @@ describe('the tick', () => {
     expect(digest?.tick).toBe(TIME.TICKS_PER_DAY);
   });
 
+  it('keeps only the latest digest, so quiet days do not bury the news', () => {
+    const { sim } = twoNations();
+    advance(sim, TIME.TICKS_PER_DAY * 5 + 1);
+    const digests = sim.state.feed.filter((e) => e.kind === 'digest');
+    expect(digests).toHaveLength(1);
+    expect(digests[0]?.text).toMatch(/^Day 5: /);
+  });
+
   it('checks the result every hour', () => {
     const { sim } = tinySim({
       provinces: { a: { owner: 'me', capitalOf: 'me' }, b: { owner: 'me' }, c: { owner: 'foe', capitalOf: 'foe' } },
