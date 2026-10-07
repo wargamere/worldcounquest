@@ -27,6 +27,7 @@ import {
   lanchester,
   liveOperations,
   needWithout,
+  OPERATION_TIMEOUT_HOURS,
   ownUnitsAt,
   provinceValue,
   provincesWithin,
@@ -78,9 +79,25 @@ export function advisorSettings(armies: 'all' | ReadonlySet<ArmyId>): PlannerSet
 }
 
 /**
+ * Recent operations (launched within OPERATION_TIMEOUT_HOURS) by any nation
+ * whose target `n` still holds: how many fronts `n` is already fighting on.
+ */
+function operationsAgainst(sim: Sim, n: NationIx): number {
+  const { state } = sim;
+  const since = state.tick - hoursToTicks(OPERATION_TIMEOUT_HOURS);
+  let count = 0;
+  for (const nation of state.nations) {
+    for (const op of nation.ai.operations) if (op.launchedAt > since && state.provinces[op.target]!.owner === n) count += 1;
+  }
+  return count;
+}
+
+/**
  * The player gets the advisor's settings. An AI nation attacks after the opening
  * calm, keeps its difficulty's (or the minors') share, and spares the player
- * until the grace day unless the player provoked it.
+ * through the grace days unless the player provoked it; after that, only so
+ * many operations may run against the player at once, so an emptied homeland
+ * falls to a neighbour or two rather than to everyone in the same week.
  */
 export function settingsFor(sim: Sim, n: NationIx): PlannerSettings {
   const { state } = sim;
@@ -94,7 +111,7 @@ export function settingsFor(sim: Sim, n: NationIx): PlannerSettings {
     armies: 'all',
     attack: state.tick >= hoursToTicks(spec.openingCalmHours),
     defendRadiusTicks: null,
-    allowPlayerTargets: dayOf(state.tick) >= spec.playerGraceDays || nation.ai.provoked,
+    allowPlayerTargets: nation.ai.provoked || (dayOf(state.tick) > spec.playerGraceDays && operationsAgainst(sim, state.player) < spec.playerOperations),
   };
 }
 

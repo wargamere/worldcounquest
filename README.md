@@ -137,14 +137,27 @@ neighbour's whole army as a threat. The fixes were lighter garrisons, starting
 armies twice as large, looser AI guards, and a relaxed guard for the player's
 advisor.
 
-Over 120 days, with the advisor playing 8 starting nations on each difficulty:
-- 13–20 battles a day worldwide;
-- 89–124 nations still alive at day 90;
-- the largest AI nation at 5–20% of world VP.
+A code review then found why the player's Staff (and the autopilot that tests
+it) stalled:
+- New Training Grounds were started on every think, because ones under
+  construction did not count against the cap.
+- The Staff never merged the 1-unit armies that training makes, so its forces
+  crumbled into pickets too small to attack.
+
+Both are fixed. On Standard, at most two AI operations may now run against the
+player at once (one on Relaxed, four on Ruthless), so an emptied homeland falls
+to a neighbour or two rather than to everyone in the same week.
+
+Over 120 days, with the advisor playing 8 starting nations on Standard:
+- 14–20 battles a day worldwide;
+- 93–121 nations still alive at day 90;
+- the largest AI nation at 6–15% of world VP;
+- the advisor's share at day 120 ranges from 0.7% (Thailand) to 14.2% (Nigeria,
+  still growing).
 
 **Not yet met:** the spec's targets for how often an advisor-driven player wins.
-In those runs it captures early and wins capitulations, but overextends and loses
-ground, and it had not won a game by day 120.
+No advisor game reached 50% by day 120. Single games swing widely with early
+capitulations, so tuning against one seed is mostly noise.
 
 ### Map colours
 

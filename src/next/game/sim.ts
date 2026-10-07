@@ -20,6 +20,7 @@ import { staffPhase } from './ai/staff';
 import { hourlyArmies, sweepDeadArmies } from './armies';
 import { progressConstruction } from './buildings';
 import { createCache, rebuildArmyIndex, takeEvents } from './cache';
+import { separateColours } from './colours';
 import { revertProvince } from './capture';
 import { dayOf, hoursToTicks, isDayStart, isHourStart } from './clock';
 import { resolveBattles } from './combat';
@@ -108,6 +109,9 @@ function pushDigest(sim: Sim): void {
   }
   const change = yesterday === null ? '' : `${vp >= yesterday ? '+' : ''}${vp - yesterday} today, `;
   const provinces = cache.nationProvinces[player]?.length ?? 0;
+  // Today's digest supersedes yesterday's: a line every midnight would bury the
+  // news in Mine and, once the feed is full, push real events out of it.
+  for (let i = state.feed.length - 1; i >= 0; i -= 1) if (state.feed[i]!.kind === 'digest') state.feed.splice(i, 1);
   pushFeed(sim, {
     kind: 'digest',
     severity: 'info',
@@ -152,9 +156,9 @@ export function stepTick(sim: Sim, hooks?: SimHooks): void {
     staffPhase(sim);
   });
   timed(hooks, 'sweep', () => {
+    if (cache.ownershipVersion !== ownership) separateColours(sim);
     if (hourly || cache.ownershipVersion !== ownership) evaluateStatus(sim);
-    sweepDeadArmies(sim);
-    rebuildArmyIndex(sim);
+    sweepDeadArmies(sim); // rebuilds the army index
     state.tick += 1;
     cache.events.ticks += 1;
   });

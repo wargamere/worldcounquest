@@ -45,7 +45,7 @@ function placementReason(sim: Sim, n: NationIx, p: ProvinceIx, b: BuildingType):
   if (province === undefined || province.owner !== n) return 'Not your province';
   const label = buildingLabel(b, sim.map.provinces[p]!.good);
   if (province.buildings[b] >= BUILDINGS[b].levels.length) return `${label} is fully built`;
-  if (BUILDINGS[b].homeOnly && statusOf(sim, p) === 'occupied') return 'Home provinces only';
+  if (BUILDINGS[b].homeOnly && statusOf(sim, p) === 'occupied') return 'Not in occupied provinces';
   if (isContested(sim, p)) return 'Cannot build during a battle';
   const current = province.construction;
   if (current !== null) return `Already building ${buildingLabel(current.building, sim.map.provinces[p]!.good)}`;

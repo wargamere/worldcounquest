@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { assignColours, borderCost, PALETTE, PLAYER_COLOUR, UNCLAIMED_COLOUR } from '../colours';
+import { captureProvince } from '../capture';
+import { assignColours, borderCost, PALETTE, PLAYER_COLOUR, separateColours, UNCLAIMED_COLOUR } from '../colours';
 import type { CountrySeed } from '../types';
 import { buildMap, countryGraph, parseFacts } from '../world';
 import { tinySim } from './helpers';
@@ -77,5 +78,47 @@ describe('assignColours on countryGraph', () => {
     const colours = assignColours(['me', 'x', 'y', 'z'], tinyGraph, 'me');
     expect(new Set([colours.x, colours.y, colours.z]).size).toBe(3);
     expect(colours.me).toBe(PLAYER_COLOUR);
+  });
+});
+
+describe('separateColours', () => {
+  /** big (two provinces) and small share a colour; capturing mid's land brings them into contact. */
+  function contact() {
+    const world = tinySim({
+      provinces: { h: { owner: 'me' }, a: { owner: 'big' }, a2: { owner: 'big' }, b: { owner: 'mid' }, c: { owner: 'small' } },
+      edges: [
+        ['h', 'a'],
+        ['a', 'a2'],
+        ['a2', 'b'],
+        ['b', 'c'],
+      ],
+    });
+    const { sim, n } = world;
+    sim.state.nations[n('big')]!.colour = PALETTE[0];
+    sim.state.nations[n('small')]!.colour = PALETTE[0];
+    sim.state.nations[n('mid')]!.colour = PALETTE[1];
+    return world;
+  }
+
+  it('recolours the smaller of two same-coloured nations that conquest brings into contact', () => {
+    const { sim, n, p } = contact();
+    captureProvince(sim, p('b'), n('big'));
+    separateColours(sim);
+    const small = sim.state.nations[n('small')]!.colour;
+    expect(sim.state.nations[n('big')]!.colour).toBe(PALETTE[0]);
+    expect(small).not.toBe(PALETTE[0]);
+    expect(PALETTE).toContain(small);
+    expect(sim.state.nations[n('me')]!.colour).toBe(PLAYER_COLOUR);
+  });
+
+  it('leaves the map alone when no twins meet, and is stable once separated', () => {
+    const { sim, n, p } = contact();
+    separateColours(sim);
+    expect(sim.state.nations[n('small')]!.colour).toBe(PALETTE[0]);
+    captureProvince(sim, p('b'), n('big'));
+    separateColours(sim);
+    const after = sim.state.nations.map((nation) => nation.colour);
+    separateColours(sim);
+    expect(sim.state.nations.map((nation) => nation.colour)).toEqual(after);
   });
 });

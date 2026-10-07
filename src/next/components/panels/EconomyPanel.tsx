@@ -60,7 +60,7 @@ export function EconomyPanel() {
         <ol className="space-y-0.5">
           {view.topProducers.map((p, i) => (
             <li key={p.province} className="flex justify-between">
-              <button type="button" onClick={() => act().clickProvince(p.province, false)} className="text-slate-200 hover:text-white">
+              <button type="button" onClick={() => act().showProvince(p.province)} className="text-slate-200 hover:text-white">
                 {names[i]}
               </button>
               <span className="tabular-nums text-slate-400">

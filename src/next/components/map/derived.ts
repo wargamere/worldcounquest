@@ -10,7 +10,7 @@ import { zeroUnits } from '@/next/game/keys';
 import { computeSupply, isArmyVisible } from '@/next/game/supply';
 import { softShare, strength } from '@/next/game/ai/assess';
 import { UNIT_TYPES } from '@/next/game/types';
-import type { Army, ProvinceIx, Sim, SupplyMap, Units } from '@/next/game/types';
+import type { Army, NationIx, ProvinceIx, Sim, SupplyMap, Units } from '@/next/game/types';
 
 interface Memo {
   supplyVersion: number;
@@ -83,9 +83,9 @@ function addWeighted(into: Units, units: Units, weight: number): void {
 
 /**
  * The player's provinces whose threat/defence is at least
- * ADVISOR.DANGER_THREAT_RATIO (the red dashed outline). Threat sums the hostile
- * armies the player can see within AI.THREAT_HOPS, weighted as the AI weighs
- * them, plus hostile armies marching in; with `showAll` every army counts.
+ * ADVISOR.DANGER_THREAT_RATIO (the red dashed outline). Threat is the strongest
+ * single nation's armies the player can see within AI.THREAT_HOPS, weighted as
+ * the AI weighs them, plus its armies marching in; with `showAll` every army counts.
  * Recomputed once per game hour and ownership version.
  */
 export function threatenedProvinces(sim: Sim, showAll: boolean): readonly ProvinceIx[] {
@@ -98,7 +98,17 @@ export function threatenedProvinces(sim: Sim, showAll: boolean): readonly Provin
   const out: ProvinceIx[] = [];
   const distance = new Int8Array(map.provinces.length);
   for (const p of ownedProvinces(sim, player)) {
-    const hostile = zeroUnits();
+    // Per nation: the AI attacks one nation at a time, so summing every foreign
+    // army in reach (sea links included) outlined nearly every province.
+    const hostile = new Map<NationIx, Units>();
+    const add = (army: Army, weight: number): void => {
+      let units = hostile.get(army.owner);
+      if (units === undefined) {
+        units = zeroUnits();
+        hostile.set(army.owner, units);
+      }
+      addWeighted(units, army.units, weight);
+    };
     // A small BFS to AI.THREAT_HOPS: 1 hop counts in full, 2 hops at the far weight.
     distance.fill(-1);
     distance[p] = 0;
@@ -108,7 +118,7 @@ export function threatenedProvinces(sim: Sim, showAll: boolean): readonly Provin
       const d = distance[at]!;
       if (d > 0) {
         const weight = d <= 1 ? AI.THREAT_NEAR_WEIGHT : AI.THREAT_FAR_WEIGHT;
-        for (const army of armiesAt(sim, at)) if (seen(army)) addWeighted(hostile, army.units, weight);
+        for (const army of armiesAt(sim, at)) if (seen(army)) add(army, weight);
       }
       if (d >= AI.THREAT_HOPS) continue;
       for (const e of map.edges[at]!) {
@@ -117,15 +127,19 @@ export function threatenedProvinces(sim: Sim, showAll: boolean): readonly Provin
         ring.push(asProvince(e.to));
       }
     }
-    for (const army of inboundTo(sim, p)) if (seen(army)) addWeighted(hostile, army.units, AI.THREAT_NEAR_WEIGHT);
-    if (hostile.rifles.hp + hostile.hunters.hp + hostile.motor.hp + hostile.guns.hp + hostile.tanks.hp <= 0) continue;
+    for (const army of inboundTo(sim, p)) if (seen(army)) add(army, AI.THREAT_NEAR_WEIGHT);
+    if (hostile.size === 0) continue;
     const own = zeroUnits();
     for (const army of armiesAt(sim, p)) if (army.alive && army.owner === player) addWeighted(own, army.units, 1);
     const province = state.provinces[p]!;
     const terrain = map.provinces[p]!.terrain;
-    const threat = strength(hostile, 0, 'attacker', softShare(own, province.garrison), terrain, province.buildings.ramparts).f;
-    const defence = strength(own, province.garrison, 'defender', softShare(hostile, 0), terrain, province.buildings.ramparts).f;
-    if (threat > 0 && threat >= ADVISOR.DANGER_THREAT_RATIO * defence) out.push(p);
+    let worst = false;
+    for (const units of hostile.values()) {
+      const threat = strength(units, 0, 'attacker', softShare(own, province.garrison), terrain, province.buildings.ramparts).f;
+      const defence = strength(own, province.garrison, 'defender', softShare(units, 0), terrain, province.buildings.ramparts).f;
+      if (threat > 0 && threat >= ADVISOR.DANGER_THREAT_RATIO * defence) worst = true;
+    }
+    if (worst) out.push(p);
   }
   memo.threatKey = key;
   memo.threatened = out;

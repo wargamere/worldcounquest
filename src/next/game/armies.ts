@@ -96,9 +96,11 @@ export type ArmyStatus = 'idle' | 'waiting' | 'moving' | 'fighting' | 'frozen';
  * for arrive-together. frozen: handed over by a capitulation and not yet free.
  */
 export function armyStatus(sim: Sim, army: Army): ArmyStatus {
+  // The surrender freeze holds even if the army is drawn into a battle meanwhile.
+  if (army.leg === null && army.path.length === 0 && army.departAt > sim.state.tick) return 'frozen';
   if (army.battle !== null) return 'fighting';
   if (army.leg !== null) return 'moving';
-  if (army.departAt > sim.state.tick) return army.path.length > 0 ? 'waiting' : 'frozen';
+  if (army.departAt > sim.state.tick) return 'waiting';
   return army.path.length > 0 ? 'moving' : 'idle';
 }
 
@@ -344,6 +346,8 @@ export function isContestedNow(sim: Sim, p: ProvinceIx): boolean {
   let ownerSide = province.garrison >= GARRISON.EMPTY_BELOW;
   for (const army of sim.cache.armiesAt[p] ?? []) {
     if (!army.alive || army.leg !== null || army.at !== p) continue;
+    // An army falling back is leaving this tick; it no longer holds the province.
+    if (army.intent === 'retreat' && army.path.length > 0 && army.battle === null) continue;
     if (army.owner === province.owner) ownerSide = true;
     else foreign = true;
   }

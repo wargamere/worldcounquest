@@ -6,6 +6,7 @@
 import { VICTORY } from './balance';
 import { checkedVp } from './cache';
 import { pushFeed } from './feed';
+import { recordPeaks } from './stats';
 import { asNation } from './ids';
 import type { GameStatus, NationIx, Sim } from './types';
 
@@ -97,6 +98,8 @@ export function evaluateStatus(sim: Sim): GameStatus {
   announceMilestones(sim);
   const { status, text } = judge(sim);
   if (status === 'playing') return status;
+  // Peaks are taken at midnight; the end can come mid-day at a new high.
+  recordPeaks(sim);
   state.status = status;
   state.endedAt = state.tick;
   sim.cache.events.statusChanged = true;

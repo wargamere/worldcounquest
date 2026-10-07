@@ -5,12 +5,12 @@ import { useGameStore } from '@/next/store/gameStore';
 import { act } from '../ui/act';
 
 type Snap = 'peek' | 'half' | 'full';
-const HEIGHT: Readonly<Record<Snap, string>> = { peek: '96px', half: '50vh', full: '90vh' };
+const HEIGHT: Readonly<Record<Snap, string>> = { peek: '96px', half: '50vh', full: 'calc(100% - 8px)' };
 const ORDER: readonly Snap[] = ['peek', 'half', 'full'];
 /** A swipe longer than this moves one snap. */
 const SWIPE_PX = 40;
 
-/** The phone bottom sheet (§8.6): peek 96 px, half 50vh, full 90vh; swipe the handle to change snaps. */
+/** The phone bottom sheet (§8.6): peek 96 px, half 50vh, full to the top of the map area (the HUD above it stays); swipe the handle to change snaps. */
 export function BottomSheet({ children, peek }: { children: React.ReactNode; peek: React.ReactNode }) {
   const sheet = useGameStore((s) => s.sheet);
   const start = useRef<number | null>(null);

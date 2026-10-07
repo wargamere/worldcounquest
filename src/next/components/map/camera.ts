@@ -39,9 +39,9 @@ export function worldCamera(viewW: number, viewH: number): Camera {
 }
 
 /** Device pixels per CSS pixel for a canvas of this CSS size: never above 2 or above 4 megapixels (§9.3). */
-export function canvasDpr(devicePixelRatio: number, cssW: number, cssH: number): number {
+export function canvasDpr(devicePixelRatio: number, cssW: number, cssH: number, maxPixels: number = RENDER.MAX_CANVAS_PIXELS): number {
   const area = Math.max(1, cssW * cssH);
-  return Math.min(devicePixelRatio, RENDER.MAX_DPR, Math.sqrt(RENDER.MAX_CANVAS_PIXELS / area));
+  return Math.min(devicePixelRatio, RENDER.MAX_DPR, Math.sqrt(maxPixels / area));
 }
 
 /**

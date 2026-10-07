@@ -289,6 +289,11 @@ function sideNumbers(side: BattleSide, out: number[]): void {
  * stream. Who asks is not part of it, so the attacker's and the defender's odds
  * of the same battle are exact complements.
  */
+/** A hash of a battle's input: equal for equal battles, so a forecast can be reused until a round changes it. */
+export function battleKey(input: BattleInput): number {
+  return hashNumbers(inputNumbers(input, []));
+}
+
 function inputNumbers(input: BattleInput, reinforcements: readonly Reinforcement[]): number[] {
   const out: number[] = [input.ctx.province, TERRAINS.indexOf(input.ctx.terrain), input.ctx.ramparts, input.ctx.totalDirections];
   sideNumbers(input.defender, out);

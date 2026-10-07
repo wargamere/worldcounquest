@@ -104,7 +104,9 @@ export class GestureRecognizer {
     if (press === null || press.id !== s.id) return;
     const dx = s.x - press.x0;
     const dy = s.y - press.y0;
-    if (press.mode === 'pending' && dx * dx + dy * dy > RENDER.LONG_PRESS_SLOP_PX * RENDER.LONG_PRESS_SLOP_PX) {
+    // A finger jitters more than a mouse, so a touch needs a wider slop before it counts as a drag.
+    const slop = press.touch ? RENDER.TOUCH_SLOP_PX : RENDER.LONG_PRESS_SLOP_PX;
+    if (press.mode === 'pending' && dx * dx + dy * dy > slop * slop) {
       this.longPressAt = null;
       if (press.marker !== null && press.button === 0) press.mode = 'drag';
       else if (press.shift && !press.touch && press.button === 0) press.mode = 'box';
@@ -135,7 +137,9 @@ export class GestureRecognizer {
       case 'drag': {
         this.endFeedback(press);
         const p = this.pick.province(s.x, s.y);
-        if (p !== null && press.marker !== null) this.handlers.dragOrder(press.marker, p);
+        // A drag that ends where it started is a sloppy tap, not an order to stay put.
+        if (p !== null && p === this.pick.province(press.x0, press.y0)) this.tap(press, s);
+        else if (p !== null && press.marker !== null) this.handlers.dragOrder(press.marker, p);
         return;
       }
       case 'box': {

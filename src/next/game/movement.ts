@@ -140,7 +140,8 @@ export function planOrder(sim: Sim, n: NationIx, ids: readonly ArmyId[], to: Pro
   const align = together && routes.length >= 2;
   const plans: DeparturePlan[] = [];
   for (const { group, path, eta, start } of routes) {
-    const departAt = tick + legRemaining(group[0]!) + (align ? latest - eta : 0);
+    // An army already at (or on its leg into) the target has nothing to wait for.
+    const departAt = tick + legRemaining(group[0]!) + (align && path.nodes.length > 0 ? latest - eta : 0);
     for (const army of group) plans.push({ army: army.id, path, departAt, approach: approachOf(start, path.nodes) });
   }
   return plans;
@@ -181,7 +182,10 @@ export function orderMove(sim: Sim, n: NationIx, ids: readonly ArmyId[], to: Pro
   const ordered: ArmyId[] = [];
   for (const plan of plans) {
     const army = armyById(sim, plan.army)!;
-    if (plan.path.nodes.length > 0 && isLeavingBattle(sim, army) && !disengage(sim, army)) continue;
+    // An army leaving a battle pays to disengage when it actually leaves: one that
+    // waits to arrive together keeps fighting until then (advanceMovement).
+    const leavesNow = plan.departAt <= sim.state.tick;
+    if (plan.path.nodes.length > 0 && leavesNow && isLeavingBattle(sim, army) && !disengage(sim, army)) continue;
     army.path = plan.path.nodes.slice();
     army.departAt = plan.departAt;
     army.intent = intentFor(sim, n, to, plan.path);
@@ -210,12 +214,19 @@ function appendRoute(sim: Sim, n: NationIx, ids: readonly ArmyId[], to: Province
     if (fresh && path.nodes.length > 0 && isLeavingBattle(sim, army) && !disengage(sim, army)) continue;
     army.path = army.path.concat(path.nodes);
     if (fresh) army.departAt = sim.state.tick + legRemaining(army);
-    if (path.hostile > 0 || sim.state.provinces[to]!.owner !== n) army.intent = 'attack';
+    if (fresh) army.intent = intentFor(sim, n, to, path);
+    else if (path.hostile > 0 || sim.state.provinces[to]!.owner !== n) army.intent = 'attack';
     army.orderedAt = sim.state.tick;
     ordered.push(army.id);
   }
   sim.cache.armyVersion += 1;
   return { ok: true, armies: ordered };
+}
+
+/** Whether units at `from` can march over `owner`'s own land to `to`. */
+export function canRally(sim: Sim, owner: NationIx, from: ProvinceIx, to: ProvinceIx): boolean {
+  const path = findPath(sim, from, to, { nation: owner, speedKmh: 1, mode: 'own', maxTicks: Number.POSITIVE_INFINITY });
+  return path !== null && path.nodes.length > 0;
 }
 
 /** A newly trained army marches over own land to the rally province and merges there. */
@@ -348,11 +359,14 @@ export function etaTicks(sim: Sim, army: Army): number | null {
  * means a new route over own land. False when none exists: the army stops.
  */
 function reroute(sim: Sim, army: Army): boolean {
+  if (army.intent === 'attack') return true;
   const next = army.path[0]!;
-  if (army.intent === 'attack' || sim.state.provinces[next]!.owner === army.owner) return true;
   const target = army.path[army.path.length - 1]!;
+  // A move or rally whose destination fell on the way stops rather than attack it.
+  const lost = army.intent !== 'retreat' && sim.state.provinces[target]!.owner !== army.owner;
+  if (!lost && sim.state.provinces[next]!.owner === army.owner) return true;
   const mode: RouteMode = army.intent === 'retreat' ? 'retreat' : 'own';
-  const path = findPath(sim, army.at, target, { nation: army.owner, speedKmh: armySpeedKmh(sim, army), mode, maxTicks: Number.POSITIVE_INFINITY });
+  const path = lost ? null : findPath(sim, army.at, target, { nation: army.owner, speedKmh: armySpeedKmh(sim, army), mode, maxTicks: Number.POSITIVE_INFINITY });
   if (path !== null && path.nodes.length > 0) {
     army.path = path.nodes.slice();
     return true;
@@ -429,8 +443,10 @@ export function advanceMovement(sim: Sim): void {
   const { state } = sim;
   const tick = state.tick;
   for (const army of state.armies) {
-    if (!army.alive || army.leg !== null || army.path.length === 0) continue;
-    if (army.departAt > tick || army.battle !== null) continue;
+    if (!army.alive || army.leg !== null || army.path.length === 0 || army.departAt > tick) continue;
+    // An army in a battle holds, unless its order came during the battle (it was
+    // waiting to arrive together): then it pays to disengage and leaves on time.
+    if (army.battle !== null && (army.orderedAt < army.battle.joinedAt || !disengage(sim, army))) continue;
     depart(sim, army);
   }
   for (const army of state.armies) if (army.alive && army.leg !== null) army.leg.done += 1;

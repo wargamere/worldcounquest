@@ -17,7 +17,7 @@ import { pushFeed, raiseAlert } from './feed';
 import { beginRetreat, retreatTarget } from './movement';
 import { roll } from './rng';
 import { recordBattleSize, recordStat } from './stats';
-import { isSupplied, isSuppliedAt } from './supply';
+import { isSuppliedAt } from './supply';
 import { UNIT_TYPES } from './types';
 import type { Army, BattleInput, BattleSide, Modifier, NationIx, ProvinceIx, Role, RoundResult, Sim, SideLoss, UnitHp } from './types';
 import { asProvince } from './ids';
@@ -381,14 +381,13 @@ function directionsOf(armies: readonly Army[]): Set<ProvinceIx> {
   return set;
 }
 
-function sideOf(sim: Sim, nation: NationIx, role: Role, armies: readonly Army[], garrison: number): BattleSide {
+function sideOf(sim: Sim, p: ProvinceIx, nation: NationIx, role: Role, armies: readonly Army[], garrison: number): BattleSide {
   const units = zeroUnits();
   const landed = zeroUnitHp();
   for (const army of armies) {
     addUnits(units, army.units);
     if (sim.state.tick < army.landingUntil) for (const type of UNIT_TYPES) landed[type] += army.units[type].hp;
   }
-  const first = armies[0];
   const side: BattleSide = {
     nation,
     role,
@@ -396,7 +395,8 @@ function sideOf(sim: Sim, nation: NationIx, role: Role, armies: readonly Army[],
     landed,
     garrison,
     directions: role === 'attacker' ? Math.max(1, directionsOf(armies).size) : 1,
-    supplied: first === undefined ? true : isSupplied(sim, first),
+    // By the province, as the forecast does: a garrison standing alone in a cut-off pocket is unsupplied too.
+    supplied: provinceSupplied(sim, nation, p),
     oilShort: sim.state.nations[nation]!.shortage.oil,
   };
   setSideRetreat(side, retreatOfArmies(armies));
@@ -421,7 +421,7 @@ export function battleInputAt(sim: Sim, p: ProvinceIx): BattleInput | null {
   }
   if (byNation.size === 0) return null;
   const nations = [...byNation.keys()].sort((x, y) => x - y);
-  const attackers = nations.map((n) => sideOf(sim, n, 'attacker', byNation.get(n)!, 0));
+  const attackers = nations.map((n) => sideOf(sim, p, n, 'attacker', byNation.get(n)!, 0));
   const allDirections = directionsOf(armies.filter((a) => a.owner !== owner));
   return {
     ctx: {
@@ -430,7 +430,7 @@ export function battleInputAt(sim: Sim, p: ProvinceIx): BattleInput | null {
       ramparts: province.buildings.ramparts,
       totalDirections: Math.max(1, allDirections.size),
     },
-    defender: sideOf(sim, owner, 'defender', defenders, garrison),
+    defender: sideOf(sim, p, owner, 'defender', defenders, garrison),
     attackers,
   };
 }
@@ -547,7 +547,7 @@ function fight(sim: Sim, p: ProvinceIx): void {
     pushFeed(sim, {
       kind: 'retreated',
       severity: army.owner === player ? 'bad' : owner === player ? 'good' : 'info',
-      text: `${army.name} fell back from ${feedName(sim, p)}`,
+      text: `${army.owner === player ? '' : `${sim.map.nations[army.owner]!.name}'s `}${army.name} fell back from ${feedName(sim, p)}`,
       nations: [army.owner, owner],
       province: p,
       army: army.id,

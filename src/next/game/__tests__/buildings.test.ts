@@ -101,7 +101,7 @@ describe('construction', () => {
 
   it('keeps the Draft Office to home and integrated provinces', () => {
     const { sim, p, n } = world();
-    expect(canBuild(sim, n('me'), p('occ'), 'draft')).toEqual({ ok: false, reason: 'Home provinces only' });
+    expect(canBuild(sim, n('me'), p('occ'), 'draft')).toEqual({ ok: false, reason: 'Not in occupied provinces' });
     expect(canBuild(sim, n('me'), p('occ'), 'works').ok).toBe(true);
     sim.state.provinces[p('occ')]!.integrated = true;
     expect(canBuild(sim, n('me'), p('occ'), 'draft').ok).toBe(true);

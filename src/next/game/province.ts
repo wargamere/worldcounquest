@@ -93,9 +93,12 @@ export function hourlyProvinces(sim: Sim): void {
     }
     let stability = province.stability;
     if (foughtThisHour(sim, p)) stability += PROVINCE.STABILITY_PER_BATTLE_HOUR;
-    if (state.nations[province.owner]!.shortage.food) stability += hunger;
+    const hungry = state.nations[province.owner]!.shortage.food;
+    if (hungry) stability += hunger;
     const target = PROVINCE.STABILITY_TARGET[statusOf(sim, p)];
-    if (stability < target) stability = Math.min(target, stability + drift);
+    // A hungry province does not recover: drifting back up would cancel the hunger
+    // penalty wherever stability sits at its target, which is most provinces.
+    if (stability < target) stability = hungry ? stability : Math.min(target, stability + drift);
     else if (stability > target) stability = Math.max(target, stability - drift);
     stability = Math.min(100, Math.max(0, stability));
     // Income depends on stability: keeping the cache equal to a fresh computation

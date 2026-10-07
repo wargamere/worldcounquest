@@ -9,7 +9,7 @@
  *   - 10m geography regions (mountain ranges, deserts, plateaus, foothills, tundra)
  * plus world-atlas countries-110m for the 175 playable countries,
  * src/data/countries.seed.json / sea-links.json, and the authored
- * src/data/terrain-overrides.json / good-overrides.json.
+ * src/data/terrain-overrides.json / good-overrides.json / name-overrides.json.
  *
  * Outputs, all committed:
  *   - public/provinces.json — simplified TopoJSON, one geometry per province,
@@ -369,6 +369,22 @@ function regionName(group: Group): string | null {
   return wholeRegion.length === group.members.length ? region : null;
 }
 
+/**
+ * Natural Earth's names are written for atlases, not map labels: it spells the
+ * Arabic ayn with a backtick, joins Moroccan regions with " - ", adds alternate
+ * spellings in brackets and has a few doubled spaces. Labels keep the first,
+ * plain name ("Marrakech", "Homs", "Central Luzon").
+ */
+function tidyName(name: string): string {
+  return name
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .split(' - ')[0]!
+    .replace(/^`/, '')
+    .replace(/`/g, '’')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function largestMemberName(group: Group): string {
   const topCity = [...group.cities].sort((a, b) => b.pop_max - a.pop_max)[0];
   const home = topCity
@@ -416,7 +432,7 @@ for (const [countryId, list] of [...byCountry.entries()].sort((a, b) => a[0].loc
     let name =
       list.length === 1
         ? seed.name
-        : (regionName(g) ?? (g.members.length > 1 && topCity ? topCity.name : largestMemberName(g)));
+        : tidyName(regionName(g) ?? (g.members.length > 1 && topCity ? topCity.name : largestMemberName(g)));
     const seen = usedNames.get(name) ?? 0;
     usedNames.set(name, seen + 1);
     if (seen > 0) name = `${name} ${seen + 1}`;
@@ -433,6 +449,18 @@ for (const [countryId, list] of [...byCountry.entries()].sort((a, b) => a[0].loc
       neighbours: [],
     });
   });
+}
+/** A hand fix for a name no rule repairs: a typo in the source, a duplicate, a legal description. */
+interface NameOverride {
+  country: string;
+  province: string;
+  name: string;
+}
+for (const o of readJson<NameOverride[]>('src/data/name-overrides.json')) {
+  const r = namedProvince(o.country, o.province, 'name-overrides.json');
+  // A province named for its largest city carries the same typo in the city.
+  if (r.city?.name === r.name) r.city.name = o.name;
+  r.name = o.name;
 }
 const recordById = new Map(records.map((r) => [r.id, r]));
 

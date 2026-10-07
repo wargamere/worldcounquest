@@ -33,7 +33,7 @@ export function ProductionPanel() {
               return (
                 <tr key={g.province} className="border-t border-slate-800 align-middle">
                   <td className="py-1.5">
-                    <button type="button" onClick={() => act().clickProvince(g.province, false)} className="text-left text-slate-100 hover:text-white">
+                    <button type="button" onClick={() => act().showProvince(g.province)} className="text-left text-slate-100 hover:text-white">
                       {g.name}
                     </button>
                     <span className="block text-[10px] text-slate-500">level {g.level}</span>
@@ -87,7 +87,7 @@ export function ProductionPanel() {
           {data.builds.map((b) => (
             <li key={b.province}>
               <div className="flex justify-between">
-                <button type="button" onClick={() => act().clickProvince(b.province, false)} className="text-slate-100 hover:text-white">
+                <button type="button" onClick={() => act().showProvince(b.province)} className="text-slate-100 hover:text-white">
                   {b.label} {b.construction.level} · {b.name}
                 </button>
                 <span className="tabular-nums text-slate-400">{Math.ceil(b.construction.hoursLeft)} h</span>

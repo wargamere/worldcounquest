@@ -49,7 +49,7 @@ export interface NationView {
  * An operation ends this long after launch if none of its armies has made
  * contact. balance.ts has no constant for it; the spec (§6.4) gives 72 h.
  */
-const OPERATION_TIMEOUT_HOURS = 72;
+export const OPERATION_TIMEOUT_HOURS = 72;
 
 // ------------------------------------------------------------------ strength
 
@@ -422,8 +422,21 @@ export function assessNation(sim: Sim, n: NationIx): NationView {
   const assessed = new Set<ProvinceIx>(border);
   if (capital !== null) assessed.add(capital);
   for (const army of armiesOf(sim, n)) if (army.alive && army.leg === null && state.provinces[army.at]!.owner === n) assessed.add(army.at);
+  // Own armies already marching to defend a province count there, or every think
+  // would send another while the first is still on the road.
+  const arriving = new Map<ProvinceIx, Units>();
+  for (const army of armiesOf(sim, n)) {
+    if (!army.alive || army.intent === 'attack' || army.intent === 'retreat' || (army.leg === null && army.path.length === 0)) continue;
+    const to = army.path.length > 0 ? army.path[army.path.length - 1]! : army.leg!.to;
+    if (state.provinces[to]!.owner !== n) continue;
+    const units = arriving.get(to) ?? zeroUnits();
+    addScaled(units, army.units, 1);
+    arriving.set(to, units);
+  }
   for (const p of [...assessed].sort((x, y) => x - y)) {
     const own = ownUnitsAt(sim, n, p);
+    const coming = arriving.get(p);
+    if (coming !== undefined) addScaled(own, coming, 1);
     const garrison = garrisonOf(sim, p);
     const hostile = threatUnitsAt(sim, n, p, null);
     hostileAt.set(p, hostile);

@@ -17,7 +17,7 @@ import { armiesAt, armiesOf, armyById, inboundTo, isContested, ownedProvinces } 
 import { dayOf, formatClock, formatDuration, hoursToTicks } from './clock';
 import { battleInputAt, battleModifiers } from './combat';
 import { daysLeft, nationRates, provinceOutput, recruitCap, STOCK_LABELS, type NationRates } from './economy';
-import { predictBattle, verdictOf, winChance } from './forecast';
+import { battleKey, predictBattle, verdictOf, winChance } from './forecast';
 import { zeroUnits } from './keys';
 import { priceFactor, quote, unitPrice } from './market';
 import { etaTicks, planEta, planOrder } from './movement';
@@ -101,6 +101,13 @@ function memoOf(sim: Sim): Memo {
   return fresh;
 }
 
+/**
+ * Battle forecasts by province, keyed by the battle's input: a battle only
+ * changes when a round is fought or an army joins, while the views refresh
+ * several times a second, and a 64-sample win chance is too costly to redo each time.
+ */
+const battleForecasts = new WeakMap<SimCache, Map<ProvinceIx, { key: number; forecast: Forecast }>>();
+
 /** The forecast of the running battle at `p`, for the player if involved, else for its first attacker. */
 function liveForecast(sim: Sim, p: ProvinceIx): Forecast | null {
   const memo = memoOf(sim);
@@ -111,9 +118,20 @@ function liveForecast(sim: Sim, p: ProvinceIx): Forecast | null {
     const player = sim.state.player;
     const involved = input.defender.nation === player || input.attackers.some((s) => s.nation === player);
     const forNation = involved ? player : (input.attackers[0]?.nation ?? input.defender.nation);
-    const prediction = predictBattle(input, forNation, [], COMBAT.PREDICT_MAX_HOURS);
-    const chance = winChance(input, forNation, [], COMBAT.WIN_CHANCE_SAMPLES);
-    forecast = { ...prediction, winChance: chance, verdict: verdictOf(chance), modifiers: battleModifiers(input), fogged: false };
+    let known = battleForecasts.get(sim.cache);
+    if (known === undefined) {
+      known = new Map();
+      battleForecasts.set(sim.cache, known);
+    }
+    const key = battleKey(input) * 1024 + forNation;
+    const cached = known.get(p);
+    if (cached !== undefined && cached.key === key) forecast = cached.forecast;
+    else {
+      const prediction = predictBattle(input, forNation, [], COMBAT.PREDICT_MAX_HOURS);
+      const chance = winChance(input, forNation, [], COMBAT.WIN_CHANCE_SAMPLES);
+      forecast = { ...prediction, winChance: chance, verdict: verdictOf(chance), modifiers: battleModifiers(input), fogged: false };
+      known.set(p, { key, forecast });
+    }
   }
   memo.forecasts.set(p, forecast);
   return forecast;
@@ -163,14 +181,16 @@ export function hudView(sim: Sim, showAll: boolean): HudView {
   const rates = nationRates(sim, n);
   const chips: StockChip[] = STOCK_KEYS.map((key) => {
     const amount = nation.stocks[key];
-    const net = rates.net[key];
+    const cap = key === 'recruits' ? recruitCap(sim, n) : null;
+    // A full pool does not grow (the cap falls with lost land, so it can sit above it).
+    const net = cap !== null && amount >= cap ? Math.min(0, rates.net[key]) : rates.net[key];
     return {
       key,
       amount,
       netPerDay: net,
       daysLeft: key === 'recruits' ? null : daysLeft(amount, net),
       short: key === 'recruits' ? false : nation.shortage[key],
-      cap: key === 'recruits' ? recruitCap(sim, n) : null,
+      cap,
       auto: isGood(key) && (nation.trade.keepDays[key] > 0 || nation.trade.sellAboveDays[key] > 0),
     };
   });
@@ -350,7 +370,9 @@ function integration(sim: Sim, p: ProvinceIx, status: ProvinceStatus): { days: n
   const { map, state } = sim;
   const country = map.provinces[p]!.country;
   if (state.nations[country]!.alive) return { days: null, blockedBy: `${nationName(sim, country)} fights on — cannot integrate` };
-  const due = state.provinces[p]!.heldSince + PROVINCE.INTEGRATION_DAYS * TIME.TICKS_PER_DAY;
+  // Integration happens at the first midnight on or after the due tick.
+  const ready = state.provinces[p]!.heldSince + PROVINCE.INTEGRATION_DAYS * TIME.TICKS_PER_DAY;
+  const due = Math.ceil(ready / TIME.TICKS_PER_DAY) * TIME.TICKS_PER_DAY;
   return { days: Math.max(0, Math.ceil((due - state.tick) / TIME.TICKS_PER_DAY)), blockedBy: null };
 }
 
@@ -935,10 +957,12 @@ export function endView(
   let headline = 'The war goes on';
   if (state.status === 'won') headline = 'Hegemony achieved';
   else if (state.status === 'lost') {
+    // In the order victory.judge decides it: a nation with no land has fallen, whoever leads.
     const rival = leadingRival(sim);
-    if (rival !== null && rival.vp >= sim.map.goalVp) headline = `${nationName(sim, rival.nation)} rules the world`;
+    const fallen = (sim.cache.nationProvinces[state.player]?.length ?? 0) === 0;
+    if (!fallen && rival !== null && rival.vp >= sim.map.goalVp) headline = `${nationName(sim, rival.nation)} rules the world`;
     else {
-      const fell = state.feed.find((e) => e.kind === 'provinceLost' && e.province !== null);
+      const fell = state.feed.find((e) => (e.kind === 'provinceLost' || (e.kind === 'revolt' && e.nations.includes(state.player))) && e.province !== null);
       const where = fell?.province ?? null;
       headline = where === null ? 'Your nation has fallen' : `Your nation has fallen — the last stand was ${provinceName(sim, where)}`;
     }

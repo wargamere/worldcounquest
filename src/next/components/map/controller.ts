@@ -55,6 +55,8 @@ const HOME_MS = 600;
 const PAN_SLACK = 0.1;
 /** Repaint rectangles are grown by this much (CSS px) so borders are re-stroked whole. */
 const DIRTY_PAD = 2;
+/** Ownership repaints are clipped to the changed provinces; the whole base is redrawn at most this often (ms) to keep nation labels whole. */
+const LABEL_REFRESH_MS = 2000;
 
 export function createMapController(o: MapControllerOptions): MapController {
   const { host, base, overlay, map } = o;
@@ -178,6 +180,7 @@ export function createMapController(o: MapControllerOptions): MapController {
     base.style.transform = `translate(${ex}px, ${ey}px) scale(${t.scale})`;
   }
 
+  let lastFullPaint = 0;
   function drawBaseIfNeeded(sim: Sim): void {
     if (gesturing) {
       const drift = camera.k / raster.k;
@@ -190,11 +193,17 @@ export function createMapController(o: MapControllerOptions): MapController {
     if (needFullBase) {
       raster = camera;
       paintBase(sim, null);
+      lastFullPaint = performance.now();
       needFullBase = false;
       dirty.clear();
     } else if (dirty.size > 0) {
-      const rects = dirtyRects(g, rasterCamera(raster), [...dirty].sort((a, b) => a - b), DIRTY_PAD);
-      paintBase(sim, rects);
+      // Nation labels move and resize with captures, which a clipped repaint leaves
+      // in pieces; a full repaint every LABEL_REFRESH_MS at most puts them right.
+      const now = performance.now();
+      if (now - lastFullPaint >= LABEL_REFRESH_MS) {
+        paintBase(sim, null);
+        lastFullPaint = now;
+      } else paintBase(sim, dirtyRects(g, rasterCamera(raster), [...dirty].sort((a, b) => a - b), DIRTY_PAD));
       dirty.clear();
     }
     placeRaster();
@@ -296,6 +305,8 @@ export function createMapController(o: MapControllerOptions): MapController {
       if (event instanceof MouseEvent && (event.button !== 0 || event.ctrlKey)) return false;
       // Shift is box select; a gesture that starts on a marker is a selection or a drag order.
       if ((event instanceof MouseEvent || (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent)) && event.shiftKey) return false;
+      // A second finger always joins the pinch, wherever it lands.
+      if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent && event.touches.length > 1) return true;
       const point = pointIn(event);
       return point === null || pick.marker(point[0], point[1]) === null;
     })
@@ -348,7 +359,7 @@ export function createMapController(o: MapControllerOptions): MapController {
     const device = window.devicePixelRatio || 1;
     const bw = viewW * (1 + 2 * RENDER.GESTURE_MARGIN);
     const bh = viewH * (1 + 2 * RENDER.GESTURE_MARGIN);
-    baseDpr = canvasDpr(device, bw, bh);
+    baseDpr = canvasDpr(device, bw, bh, RENDER.MAX_BASE_CANVAS_PIXELS);
     overlayDpr = canvasDpr(device, viewW, viewH);
     base.width = Math.round(bw * baseDpr);
     base.height = Math.round(bh * baseDpr);

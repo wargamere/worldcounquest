@@ -65,7 +65,9 @@ describe('the tick', () => {
     const leg = armyById(sim, a(0))!.leg!;
     expect(sim.state.nations[n('me')]!.shortage.oil).toBe(true);
     const fullSpeedTicks = Math.ceil(1000 / (30 * 0.25));
-    expect(leg.ticks).toBe(leg.done + Math.ceil((fullSpeedTicks - leg.done) / ECONOMY.OIL_SHORT_SPEED));
+    // The covered share keeps its place: done doubles with the halved speed, the rest takes twice as long.
+    const doneBefore = leg.done * ECONOMY.OIL_SHORT_SPEED;
+    expect(leg.ticks).toBe(leg.done + Math.ceil((fullSpeedTicks - doneBefore) / ECONOMY.OIL_SHORT_SPEED));
   });
 
   it('hands revolting provinces back to their original nation', () => {
@@ -113,6 +115,14 @@ describe('the tick', () => {
     const digest = sim.state.feed.find((e) => e.kind === 'digest');
     expect(digest?.text).toMatch(/^Day 1: 2 provinces, VP 5 \(\+0 today, \d+\.\d%\), attacks won 0, lost 0$/);
     expect(digest?.tick).toBe(TIME.TICKS_PER_DAY);
+  });
+
+  it('keeps only the latest digest, so quiet days do not bury the news', () => {
+    const { sim } = twoNations();
+    advance(sim, TIME.TICKS_PER_DAY * 5 + 1);
+    const digests = sim.state.feed.filter((e) => e.kind === 'digest');
+    expect(digests).toHaveLength(1);
+    expect(digests[0]?.text).toMatch(/^Day 5: /);
   });
 
   it('checks the result every hour', () => {

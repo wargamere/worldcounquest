@@ -380,9 +380,9 @@ export const AI = {
 
 /** The three difficulties. Rules are symmetric; only the AI and the opening change. */
 export const DIFFICULTY: Readonly<Record<Difficulty, DifficultySpec>> = {
-  relaxed: { label: 'Relaxed', blurb: 'Slower, cautious rivals and a bigger war chest.', aiOutput: 0.85, majorCount: 16, majorThinkHours: 6, attackKeep: 0.45, maxOperations: 3, openingCalmHours: 96, playerGraceDays: 10, playerFundsDays: 12, playerArmyMultiplier: 1.5 }, // learning the game (spec target: the advisor player wins 16-20 of 24; not yet met)
-  standard: { label: 'Standard', blurb: 'A fair world. Rivals grow into empires and come for you once you look weak.', aiOutput: 1.0, majorCount: 20, majorThinkHours: 4, attackKeep: 0.3, maxOperations: 6, openingCalmHours: 48, playerGraceDays: 5, playerFundsDays: 8, playerArmyMultiplier: 1.2 }, // the benchmark (spec target 10-14 of 24; not yet met)
-  ruthless: { label: 'Ruthless', blurb: 'Richer, bolder rivals who come for you early.', aiOutput: 1.2, majorCount: 24, majorThinkHours: 3, attackKeep: 0.2, maxOperations: 8, openingCalmHours: 24, playerGraceDays: 2, playerFundsDays: 4, playerArmyMultiplier: 1.0 }, // for experts (spec target 3-7 of 24; not yet met)
+  relaxed: { label: 'Relaxed', blurb: 'Slower, cautious rivals and a bigger war chest.', aiOutput: 0.85, majorCount: 16, majorThinkHours: 6, attackKeep: 0.45, maxOperations: 3, openingCalmHours: 96, playerGraceDays: 10, playerOperations: 1, playerFundsDays: 12, playerArmyMultiplier: 1.5 }, // learning the game (spec target: the advisor player wins 16-20 of 24; not yet met)
+  standard: { label: 'Standard', blurb: 'A fair world. Rivals grow into empires and come for you once you look weak.', aiOutput: 1.0, majorCount: 20, majorThinkHours: 4, attackKeep: 0.3, maxOperations: 6, openingCalmHours: 48, playerGraceDays: 5, playerOperations: 2, playerFundsDays: 8, playerArmyMultiplier: 1.2 }, // the benchmark (spec target 10-14 of 24; not yet met)
+  ruthless: { label: 'Ruthless', blurb: 'Richer, bolder rivals who come for you early.', aiOutput: 1.2, majorCount: 24, majorThinkHours: 3, attackKeep: 0.2, maxOperations: 8, openingCalmHours: 24, playerGraceDays: 2, playerOperations: 4, playerFundsDays: 4, playerArmyMultiplier: 1.0 }, // for experts (spec target 3-7 of 24; not yet met)
 };
 
 /** The advisor, Suggest (A), Attack with..., and Staff (Delegate/Defend stances). */
@@ -426,7 +426,8 @@ export const RENDER = {
   WORLD_WIDTH: 2000, // projected base space width
   WORLD_HEIGHT: 1000, // projected base space height
   MAX_ZOOM: 64, // d3-zoom scale extent upper bound
-  MAX_CANVAS_PIXELS: 4_000_000, // DPR is capped so no canvas exceeds 4 megapixels
+  MAX_CANVAS_PIXELS: 4_000_000, // DPR is capped so no canvas exceeds 4 megapixels...
+  MAX_BASE_CANVAS_PIXELS: 10_000_000, // ...except the base map, which carries gesture margins (2.25x the view): borders and labels at native resolution on a 1440 px Retina screen
   MAX_DPR: 2, // and never above 2
   STAR_PROVINCES: 20, // below city-dot zoom, only your capital and those of nations this big get a star (78 nations start with 8+ provinces)
   BATCH_FILLS_BELOW_ZOOM: 3, // below this zoom fills are batched by colour
@@ -450,7 +451,8 @@ export const RENDER = {
   TINY_PROVINCE_PX2: 400, // a province this small on screen...
   TINY_ANCHOR_PX: 16, // ...wins a tap whose point is within 16 px of its anchor
   LONG_PRESS_MS: 450, // long-press duration
-  LONG_PRESS_SLOP_PX: 6, // movement that cancels a long-press
+  LONG_PRESS_SLOP_PX: 6, // mouse movement that cancels a long-press and starts a drag
+  TOUCH_SLOP_PX: 12, // the same for a finger, which jitters 8-10 px in a plain tap
   GESTURE_SETTLE_MS: 150, // re-raster the base layer this long after a gesture ends
   GESTURE_RERASTER_SCALE: 1.5, // or when a long gesture drifts this far in scale
   GESTURE_MARGIN: 0.25, // base raster margin on each side during gestures
