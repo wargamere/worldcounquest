@@ -118,7 +118,7 @@ function minorAttacks(sim: Sim, view: NationView, s: PlannerSettings, out: Comma
     }
     if (picks.length === 0 || sim.cache.counters.orders + picks.length > AI.MAX_ORDERS) continue;
     const owner = state.nations[state.provinces[t]!.owner]!;
-    const keep = owner.tier === 'major' ? AI.MINOR_KEEP_VS_MAJOR : AI.MINOR_KEEP;
+    const keep = owner.tier === 'major' || owner.isPlayer ? AI.MINOR_KEEP_VS_MAJOR : AI.MINOR_KEEP;
     const { prediction } = forecastPicks(sim, n, t, picks, null, true);
     if (prediction.winner !== 'attacker' || prediction.attackerKeeps < keep) continue;
     const etaTicks = picks.reduce((max, p) => Math.max(max, p.eta), 0);

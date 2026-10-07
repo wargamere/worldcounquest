@@ -158,8 +158,7 @@ export function stepTick(sim: Sim, hooks?: SimHooks): void {
   timed(hooks, 'sweep', () => {
     if (cache.ownershipVersion !== ownership) separateColours(sim);
     if (hourly || cache.ownershipVersion !== ownership) evaluateStatus(sim);
-    sweepDeadArmies(sim);
-    rebuildArmyIndex(sim);
+    sweepDeadArmies(sim); // rebuilds the army index
     state.tick += 1;
     cache.events.ticks += 1;
   });

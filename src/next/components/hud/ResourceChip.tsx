@@ -29,7 +29,8 @@ export function ResourceChip({ chip, open, onToggle }: { chip: StockChip; open: 
         {compact(chip.amount)}
         {chip.cap !== null && <span className="font-normal text-slate-400">/{compact(chip.cap)}</span>}
       </span>
-      <span className={`tabular-nums ${chip.netPerDay < -0.5 ? 'text-rose-300' : chip.netPerDay > 0.5 ? 'text-emerald-300' : 'text-slate-500'}`}>{formatRate(chip.netPerDay)}</span>
+      {/* Below 1280 px the five chips with rates overflow the bar, so only a draining stock keeps its rate there. */}
+      <span className={`tabular-nums ${chip.netPerDay < -0.5 ? 'text-rose-300' : `hidden xl:inline ${chip.netPerDay > 0.5 ? 'text-emerald-300' : 'text-slate-500'}`}`}>{formatRate(chip.netPerDay)}</span>
       {runsOut && <span className="hidden whitespace-nowrap text-[10px] text-rose-300 2xl:inline">out in {formatDays(chip.daysLeft ?? 0)}</span>}
       {chip.auto && <span className="hidden rounded bg-slate-700 px-1 text-[9px] uppercase tracking-wide text-slate-300 2xl:inline">auto</span>}
     </button>

@@ -255,8 +255,10 @@ export interface DifficultySpec {
   readonly maxOperations: number;
   /** No AI offensive of any kind before this many game hours. */
   readonly openingCalmHours: number;
-  /** AI nations do not target the player before this day unless provoked. */
+  /** AI nations do not target the player for this many full days unless provoked. */
   readonly playerGraceDays: number;
+  /** At most this many AI operations against the player at once (a nation the player attacked is exempt). */
+  readonly playerOperations: number;
   readonly playerFundsDays: number;
   readonly playerArmyMultiplier: number;
 }

@@ -2,26 +2,19 @@
 
 import type { AlertKind } from '@/next/game/types';
 import { exportCommandLog, useGameStore } from '@/next/store/gameStore';
-import type { Prefs } from '@/next/store/persistence';
 import { act } from '../ui/act';
 
 const ALERTS: readonly { kind: AlertKind; label: string }[] = [
   { kind: 'capitalAttacked', label: 'Your capital is attacked' },
-  { kind: 'firstContact', label: 'First contact with a new nation' },
   { kind: 'shortage', label: 'A stock runs out' },
   { kind: 'provinceAttacked', label: 'A province is attacked' },
   { kind: 'provinceLost', label: 'A province is lost' },
   { kind: 'armyDestroyed', label: 'An army is destroyed' },
   { kind: 'capitulation', label: 'A nation capitulates' },
 ];
-const DETAIL: readonly { value: Prefs['detail']; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'low', label: 'Low' },
-  { value: 'high', label: 'High' },
-];
 const DEV = process.env.NODE_ENV !== 'production';
 
-/** Settings (§8.3): auto-pause, Show all armies, instant right-click, reduce motion, map detail, the coach and the save. */
+/** Settings (§8.3): auto-pause, Show all armies, instant right-click, reduce motion, the coach and the save. */
 export function SettingsDialog() {
   const prefs = useGameStore((s) => s.prefs);
   const warning = useGameStore((s) => s.saveWarning);
@@ -49,14 +42,6 @@ export function SettingsDialog() {
         <Toggle label="Show all armies (lifts the fog; the end screen records it)" checked={prefs.showAllArmies} onChange={(on) => act().setPrefs({ showAllArmies: on })} />
         <Toggle label="Instant right-click orders" checked={prefs.instantRightClick} onChange={(on) => act().setPrefs({ instantRightClick: on })} />
         <Toggle label="Reduce motion" checked={prefs.reduceMotion} onChange={(on) => act().setPrefs({ reduceMotion: on })} />
-        <div className="flex items-center gap-2">
-          <span>Map detail</span>
-          {DETAIL.map((d) => (
-            <button key={d.value} type="button" aria-pressed={prefs.detail === d.value} onClick={() => act().setPrefs({ detail: d.value })} className={`rounded border px-2 py-0.5 ${prefs.detail === d.value ? 'border-amber-500 bg-amber-500/15 text-amber-100' : 'border-slate-700 hover:border-slate-500'}`}>
-              {d.label}
-            </button>
-          ))}
-        </div>
       </section>
       <section className="flex flex-wrap gap-2">
         <button type="button" onClick={() => act().replayCoach()} className="rounded border border-slate-600 px-2 py-1 text-slate-100 hover:border-slate-400">
@@ -65,7 +50,7 @@ export function SettingsDialog() {
         <button
           type="button"
           onClick={() => {
-            if (window.confirm('Delete the saved game? This cannot be undone.')) act().deleteSave();
+            if (window.confirm('Delete this game and its save, and go back to the start screen? This cannot be undone.')) act().deleteSave();
           }}
           className="rounded border border-rose-700 px-2 py-1 text-rose-200 hover:border-rose-500"
         >

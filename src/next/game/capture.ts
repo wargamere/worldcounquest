@@ -46,7 +46,11 @@ function settleBattle(sim: Sim, p: ProvinceIx): void {
   const province = sim.state.provinces[p]!;
   if (province.battleSince === null || isContestedNow(sim, p)) return;
   province.battleSince = null;
-  for (const army of standingAt(sim, p)) army.battle = null;
+  for (const army of standingAt(sim, p)) {
+    army.battle = null;
+    // An attack that took its target is over; a move home must not stay an attack.
+    if (army.path.length === 0 && army.intent === 'attack') army.intent = 'move';
+  }
   sim.cache.battleLog.delete(p);
 }
 

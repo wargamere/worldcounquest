@@ -13,7 +13,7 @@ import { isContested } from './cache';
 import { pay, refund, scaleCost, shortfallReason } from './economy';
 import { pushFeed } from './feed';
 import { asProvince } from './ids';
-import { orderRally } from './movement';
+import { canRally, orderRally } from './movement';
 import { statusOf } from './province';
 import { recordUnits } from './stats';
 import { STOCK_KEYS } from './types';
@@ -59,8 +59,11 @@ export function enqueue(sim: Sim, n: NationIx, p: ProvinceIx, unit: UnitType, co
   const check = canTrain(sim, n, p, unit, count);
   if (!check.ok) return check;
   pay(sim, n, scaleCost(UNITS[unit].cost, count));
-  const queue = sim.state.provinces[p]!.queue;
-  for (let i = 0; i < count; i += 1) queue.push(newItem(sim, p, unit, { ...UNITS[unit].cost }));
+  const province = sim.state.provinces[p]!;
+  // A keep-training repeat still waiting for resources would hold up units just
+  // paid for; it costs nothing to drop, and keep training queues it again later.
+  province.queue = province.queue.filter((item) => !isUnpaid(item));
+  for (let i = 0; i < count; i += 1) province.queue.push(newItem(sim, p, unit, { ...UNITS[unit].cost }));
   return OK;
 }
 
@@ -116,12 +119,23 @@ function deliver(sim: Sim, p: ProvinceIx, unit: UnitType): void {
   const nation = state.nations[owner]!;
   const rally = province.rally;
   let armyId: ArmyId;
-  if (rally !== null && state.provinces[rally]!.owner === owner) {
+  if (rally !== null && state.provinces[rally]!.owner === owner && canRally(sim, owner, p, rally)) {
     const army = createArmy(sim, owner, p, unitsFromCounts({ [unit]: 1 }), defaultStance(sim, owner));
     orderRally(sim, army, rally);
     armyId = army.id;
   } else {
-    // A rally point lost to the enemy is forgotten.
+    // A rally point lost to the enemy, or cut off from here, is forgotten: the
+    // units join the army here instead of each standing alone.
+    if (rally !== null && nation.isPlayer) {
+      pushFeed(sim, {
+        kind: 'routeBlocked',
+        severity: 'bad',
+        text: `Rally point ${map.provinces[rally]!.name} is cut off: new units stay in ${map.provinces[p]!.name}`,
+        nations: [owner],
+        province: p,
+        army: null,
+      });
+    }
     province.rally = null;
     armyId = spawnUnits(sim, owner, p, unit, 1).id;
   }

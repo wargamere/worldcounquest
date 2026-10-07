@@ -21,6 +21,7 @@ import { armyById, armiesAt, ownedProvinces } from '@/next/game/cache';
 import { formatDuration } from '@/next/game/clock';
 import { concernsPlayer } from '@/next/game/feed';
 import { createGame } from '@/next/game/init';
+import { etaTicks } from '@/next/game/movement';
 import { previewOrder } from '@/next/game/orders';
 import { serialize } from '@/next/game/save';
 import { isArmyVisible } from '@/next/game/supply';
@@ -165,6 +166,8 @@ export interface GameStore {
   setSheet(s: 'peek' | 'half' | 'full'): void;
   setMapMode(m: MapMode): void;
   focusProvinces(ps: readonly ProvinceIx[]): void;
+  /** A province link in a drawer: close the drawer, select the province and frame it. */
+  showProvince(p: ProvinceIx): void;
   focusHome(): void;
   focusCapital(): void;
   dismissToast(id: number): void;
@@ -656,7 +659,9 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
       }
       const own = ownArmies(sim, selectedArmies(selection));
       const elsewhere = own.some((id) => armyById(sim, id)?.at !== p || armyById(sim, id)?.leg !== null);
-      if (own.length > 0 && !additive && !multiSelect && elsewhere) {
+      // In multi-select the peek says "tap a province to order": the tap orders the picked armies.
+      if (own.length > 0 && !additive && elsewhere) {
+        if (multiSelect) set({ multiSelect: false });
         get().openDraft(own, p);
         return;
       }
@@ -708,11 +713,15 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
       const result = get().command({ kind: 'move', nation: sim.state.player, armies: own, to: p, together: MOVEMENT.ARRIVE_TOGETHER_DEFAULT, append });
       if (!result.ok) return;
       const name = sim.map.provinces[p]!.name;
-      const verdict = preview.forecast === null ? '' : ` · ${VERDICT_LABEL[preview.forecast.verdict]}`;
+      const survivors = ownArmies(sim, result.armies.length > 0 ? result.armies : own);
+      // A waypoint starts where the current route ends, so the preview (planned from
+      // here) neither times it nor forecasts it: time the routes as ordered instead.
+      let eta = preview.arriveInTicks;
+      if (append) eta = survivors.reduce((max, id) => Math.max(max, etaTicks(sim, armyById(sim, id)!) ?? 0), 0);
+      const verdict = preview.forecast === null || append ? '' : ` · ${VERDICT_LABEL[preview.forecast.verdict]}`;
       const who = own.length === 1 ? (armyById(sim, own[0]!)?.name ?? 'Army') : `${own.length} armies`;
       const hostile = preview.intent === 'move' && preview.warnings.includes('crossesHostile') ? ' · crosses enemy land' : '';
-      get().toast(`${who} → ${name} · ${formatDuration(preview.arriveInTicks)}${verdict}${hostile}`, hostile === '' ? 'info' : 'bad');
-      const survivors = ownArmies(sim, result.armies.length > 0 ? result.armies : own);
+      get().toast(`${who} → ${name} · ${formatDuration(eta)}${verdict}${hostile}`, hostile === '' ? 'info' : 'bad');
       set({ selection: survivors.length > 0 ? { kind: 'armies', armies: survivors } : { kind: 'none' }, preview: null });
     },
 
@@ -841,7 +850,9 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
     delegate(stance, target) {
       const sim = currentSim();
       if (sim === null) return;
-      const ids = target === 'selected' ? ownArmies(sim, selectedArmies(get().selection)) : idleArmies(sim);
+      // "All idle armies" hands over the Manual ones and never toggles back; F on a selection toggles.
+      const idleManual = (): ArmyId[] => idleArmies(sim).filter((id) => armyById(sim, id)?.stance === 'manual');
+      const ids = target === 'selected' ? ownArmies(sim, selectedArmies(get().selection)) : idleManual();
       const chosen = ids.length > 0 ? ids : target === 'selected' ? idleArmies(sim) : [];
       if (chosen.length === 0) {
         get().toast('No armies to hand over', 'info');
@@ -920,6 +931,13 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
       wake();
     },
 
+    showProvince(p) {
+      set({ panel: null });
+      select({ kind: 'province', province: p });
+      if (get().coarse) set({ sheet: 'half' });
+      get().focusProvinces([p]);
+    },
+
     focusHome() {
       // The map frames the land joined to the capital, not every owned province:
       // all of France includes French Guiana and framed the Atlantic.
@@ -960,6 +978,9 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
       if (step >= 8) {
         markOnboardingDone();
         set({ coachStep: null });
+      } else if (step + 1 === 3 && get().speed !== 0) {
+        // "Start the clock" when it already runs: pressing Space would only pause it.
+        set({ coachStep: 4 });
       } else set({ coachStep: step + 1 });
       const sim = currentSim();
       const target = get().coachTarget;
@@ -978,6 +999,15 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
     },
 
     takeOverTab() {
+      // The other tab may have played on and saved since this one froze: carry on
+      // from that save, or this tab's next save would write the older game over it.
+      const map = mapStatic;
+      const sim = currentSim();
+      const file = map === null ? null : loadGame(map);
+      if (file !== null && sim !== null && file.state.tick > sim.state.tick) {
+        begin(file.state, file.meta.playedMs);
+        return;
+      }
       releaseTab?.();
       releaseTab = claimTab(() => {
         set({ tabLost: true });
@@ -1123,8 +1153,11 @@ export const useGameStore: UseBoundStore<StoreApi<GameStore>> = create<GameStore
     },
 
     deleteSave() {
+      // A game still running would save itself again at the next pause or autosave.
+      const playing = currentSim() !== null;
+      end();
       clearSave();
-      set({ hasSavedGame: false });
+      set({ hasSavedGame: false, ...(playing ? { phase: 'menu' as const, speed: 0 as const, toasts: [], coachStep: null, panel: null } : {}) });
       get().toast('Saved game deleted', 'info');
     },
 

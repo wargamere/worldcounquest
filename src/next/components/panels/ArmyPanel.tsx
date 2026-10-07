@@ -6,7 +6,7 @@ import { STOCK_LABELS } from '@/next/game/economy';
 import { STOCK_KEYS, UNIT_TYPES } from '@/next/game/types';
 import type { ArmyId, Command, NationIx, Sim, Stance } from '@/next/game/types';
 import { armyView } from '@/next/game/views';
-import { playerNation, useSimView } from '@/next/store/gameStore';
+import { playerNation, useGameStore, useSimView } from '@/next/store/gameStore';
 import { act } from '../ui/act';
 import { pct, whole } from '../ui/format';
 import { Icon } from '../ui/Icon';
@@ -25,6 +25,7 @@ export function confirmDisband(name: string): boolean {
 export function ArmyPanel({ army }: { army: ArmyId }) {
   const view = useSimView(useCallback((sim: Sim) => armyView(sim, [army]), [army]));
   const [splitting, setSplitting] = useState(false);
+  const coarse = useGameStore((s) => s.coarse);
   if (view === null) return <p className="p-3 text-xs text-slate-500">This army is gone.</p>;
   const nation = playerNation();
   const run = (build: (n: NationIx) => Command): void => {
@@ -120,7 +121,7 @@ export function ArmyPanel({ army }: { army: ArmyId }) {
 
       {view.ours && (
         <>
-          {view.idle && <p className="text-[11px] text-slate-500">Click a province to order a move or attack; right-click orders at once.</p>}
+          {view.idle && <p className="text-[11px] text-slate-500">{coarse ? 'Tap a province to order a move or attack.' : 'Click a province to order a move or attack; right-click orders at once.'}</p>}
           <div className="flex flex-wrap gap-1.5">
             {view.moving && (
               <Action label="Stop" onClick={() => run((n) => ({ kind: 'stop', nation: n, armies: view.ids }))} />

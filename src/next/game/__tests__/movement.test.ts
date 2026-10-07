@@ -330,9 +330,12 @@ describe('orders and marching', () => {
     const leg = armyById(sim, a(1))!.leg!;
     const { ticks, done } = leg;
     onOilShortageChanged(sim, n('me'), 1, ECONOMY.OIL_SHORT_SPEED);
-    expect(leg.ticks).toBe(done + Math.ceil((ticks - done) * 2));
+    // Half speed: twice the ticks for the rest, and the share already covered keeps its place.
+    expect(leg.done).toBe(done * 2);
+    expect(leg.ticks).toBe(done * 2 + Math.ceil((ticks - done) * 2));
     onOilShortageChanged(sim, n('me'), ECONOMY.OIL_SHORT_SPEED, 1);
-    expect(leg.ticks).toBe(done + Math.ceil(((ticks - done) * 2) / 2));
+    expect(leg.done).toBe(done);
+    expect(leg.ticks).toBe(ticks);
     const rifles = armyById(sim, a(0))!;
     ok(orderMove(sim, n('me'), [a(0)], p('m1'), false, false));
     step(sim);

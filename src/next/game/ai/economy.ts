@@ -245,14 +245,17 @@ export function planEconomy(sim: Sim, view: NationView): Command[] {
   }
 
   const owned = ownedProvinces(sim, n);
-  const grounds = owned.filter((p) => state.provinces[p]!.buildings.training > 0).length;
+  // Grounds under construction count too: thinks come every few hours and a ground
+  // takes longer than that to finish, so counting finished ones alone overbuilt
+  // (one nation started 15 in a day against a cap of 4).
+  const grounds = owned.filter((p) => state.provinces[p]!.buildings.training > 0 || state.provinces[p]!.construction?.building === 'training').length;
   if (owned.length >= AI.EXTRA_TRAINING_AT_PROVINCES && grounds < AI.MAX_TRAINING_GROUNDS) {
     const distance = (p: ProvinceIx): number => {
       const ticks = view.field.ticks[p] ?? -1;
       return ticks < 0 ? Number.POSITIVE_INFINITY : ticks;
     };
     const site = owned
-      .filter((p) => statusOf(sim, p) === 'home' && state.provinces[p]!.buildings.training === 0 && placeable(sim, n, p, 'training'))
+      .filter((p) => statusOf(sim, p) === 'home' && state.provinces[p]!.buildings.training === 0 && state.provinces[p]!.construction === null && placeable(sim, n, p, 'training'))
       .sort((a, b) => map.provinces[b]!.population - map.provinces[a]!.population || distance(a) - distance(b) || a - b)[0];
     if (site !== undefined) tryBuild(sim, w, site, 'training', 'build', out);
   }

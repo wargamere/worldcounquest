@@ -1,7 +1,7 @@
 /**
  * The Staff (§6.9): every ADVISOR.THINK_HOURS it commands the player's Delegate
  * and Defend armies, never Manual ones. Delegate armies get the advisor planner
- * (defence, retreats, offensive, staging) with the advisor's settings; Defend
+ * (defence, retreats, offensive, staging, merging) with the advisor's settings; Defend
  * armies only defend within ADVISOR.DEFEND_RADIUS_HOURS of their post and go
  * back to it when idle. The Staff never trains, builds or trades. Its commands
  * go through applyCommand as source 'staff', so it cannot touch a Manual army.
@@ -13,7 +13,7 @@ import { isIdle } from '../armies';
 import { UNIT_TYPES } from '../types';
 import type { ArmyId, Command, Sim } from '../types';
 import { assessPlayer, defenceF, sameOwnRegion, threatSoft, ownUnitsAt, type NationView } from './assess';
-import { advisorSettings, planDefence, planOffensive, planRetreats, planStaging, type PlannerSettings } from './military';
+import { advisorSettings, planDefence, planHousekeeping, planOffensive, planRetreats, planStaging, type PlannerSettings } from './military';
 import { resetCounters, runThink, type AppliedCommand } from './think';
 
 /** Idle Defend armies away from their post go back, if the province they are in can spare them. */
@@ -65,6 +65,9 @@ export function runStaff(sim: Sim): AppliedCommand[] {
   const field = advisorSettings(delegate);
   const commands: Command[] = [...planDefence(sim, view, guard), ...planDefence(sim, view, field), ...planRetreats(sim, view)];
   commands.push(...planOffensive(sim, view, field), ...planStaging(sim, view, field));
+  // Merge the 1-unit armies training makes and split guard surpluses, as the AI
+  // does: without it the Staff's forces crumble into pickets too small to attack.
+  commands.push(...planHousekeeping(sim, view));
   const used = new Set<ArmyId>();
   for (const command of commands) if (command.kind === 'move' || command.kind === 'retreat') for (const id of command.armies) used.add(id);
   return runThink(sim, view, [...commands, ...returnToPosts(sim, view, defend, used)], 'staff');

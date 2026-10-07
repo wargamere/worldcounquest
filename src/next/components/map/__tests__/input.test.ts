@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { RENDER } from '@/next/game/balance';
 import { asProvince } from '@/next/game/ids';
-import type { ArmyId, ProvinceIx } from '@/next/game/types';
+import type { ArmyId } from '@/next/game/types';
 import { GestureRecognizer, rectOf, type InputFeedback, type MapPick, type PointerSample } from '../input';
 import type { MapInputHandlers } from '../types';
 import { ids } from './fixtures';
 
 /** A marker at (100, 100) holding armies 1 and 2; land left of x = 500 is province 7, sea beyond. */
-function setup(coarse = false): { r: GestureRecognizer; calls: unknown[][]; feedback: InputFeedback[] } {
+function setup(coarse = false, province: MapPick['province'] = (x) => (x < 500 ? asProvince(7) : null)): { r: GestureRecognizer; calls: unknown[][]; feedback: InputFeedback[] } {
   const calls: unknown[][] = [];
   const feedback: InputFeedback[] = [];
   const record =
@@ -28,7 +28,7 @@ function setup(coarse = false): { r: GestureRecognizer; calls: unknown[][]; feed
   };
   const pick: MapPick = {
     marker: (x, y): readonly ArmyId[] | null => (Math.abs(x - 100) <= 14 && Math.abs(y - 100) <= 14 ? ids(1, 2) : null),
-    province: (x): ProvinceIx | null => (x < 500 ? asProvince(7) : null),
+    province,
     armiesIn: (x0, _y0, x1) => (Math.min(x0, x1) <= 100 && Math.max(x0, x1) >= 100 ? ids(1, 2) : []),
     ownArmiesAt: (p) => (p === 7 ? ids(1, 2, 3) : []),
     feedback: (f) => feedback.push(f),
@@ -103,7 +103,7 @@ describe('long-press', () => {
   it('is cancelled by moving more than the slop, and is touch-only on fine pointers', () => {
     const { r, calls } = setup();
     r.down(at(300, 300, 0, { touch: true }));
-    r.move(at(300 + RENDER.LONG_PRESS_SLOP_PX + 1, 300, 100, { touch: true }));
+    r.move(at(300 + RENDER.TOUCH_SLOP_PX + 1, 300, 100, { touch: true }));
     expect(r.longPressAt).toBeNull();
     r.longPressDue(RENDER.LONG_PRESS_MS);
     r.up(at(320, 300, 600, { touch: true }));
@@ -127,7 +127,8 @@ describe('long-press', () => {
 
 describe('drags', () => {
   it('drags a marker onto a province as an order, with feedback', () => {
-    const { r, calls, feedback } = setup();
+    // The marker stands in province 6; the drag ends in province 7.
+    const { r, calls, feedback } = setup(false, (x) => (x < 150 ? asProvince(6) : x < 500 ? asProvince(7) : null));
     r.down(at(100, 100, 0));
     r.move(at(200, 150, 50));
     r.move(at(300, 200, 100));
@@ -138,6 +139,15 @@ describe('drags', () => {
     ]);
     expect(feedback.at(-2)).toEqual({ box: null, drag: { from: [100, 100], to: [300, 200] } });
     expect(feedback.at(-1)).toEqual({ box: null, drag: null });
+  });
+
+  it('a drag that ends in the province it started from is a tap, not an order to stay', () => {
+    const { r, calls } = setup();
+    r.down(at(100, 100, 0));
+    r.move(at(120, 100, 50));
+    r.up(at(120, 100, 100));
+    expect(calls.filter((c) => c[0] === 'dragOrder')).toEqual([]);
+    expect(calls).toContainEqual(['tapMarker', ids(1, 2), false]);
   });
 
   it('a drag dropped on the sea orders nothing', () => {

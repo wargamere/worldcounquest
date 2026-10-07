@@ -65,7 +65,9 @@ describe('the tick', () => {
     const leg = armyById(sim, a(0))!.leg!;
     expect(sim.state.nations[n('me')]!.shortage.oil).toBe(true);
     const fullSpeedTicks = Math.ceil(1000 / (30 * 0.25));
-    expect(leg.ticks).toBe(leg.done + Math.ceil((fullSpeedTicks - leg.done) / ECONOMY.OIL_SHORT_SPEED));
+    // The covered share keeps its place: done doubles with the halved speed, the rest takes twice as long.
+    const doneBefore = leg.done * ECONOMY.OIL_SHORT_SPEED;
+    expect(leg.ticks).toBe(leg.done + Math.ceil((fullSpeedTicks - doneBefore) / ECONOMY.OIL_SHORT_SPEED));
   });
 
   it('hands revolting provinces back to their original nation', () => {

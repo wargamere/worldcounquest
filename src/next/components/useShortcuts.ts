@@ -8,15 +8,20 @@ import { confirmDisband } from './panels/ArmyPanel';
 
 const SPEED_KEYS: Readonly<Record<string, RunSpeed>> = { '1': 1, '2': 2, '3': 4, '4': 8 };
 
+/** Inputs that take typed text; a checkbox or radio does not, so the shortcuts still apply. */
+const TEXT_INPUTS: ReadonlySet<string> = new Set(['text', 'search', 'number', 'email', 'password', 'url', 'tel']);
+
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+  if (target instanceof HTMLInputElement) return TEXT_INPUTS.has(target.type);
+  return target.isContentEditable || ['TEXTAREA', 'SELECT'].includes(target.tagName);
 }
 
 /**
  * The keyboard (§8.5). Keys are ignored while an input has focus, Tab keeps its
  * browser behaviour, and a pointer click gives focus back from buttons (the
- * turn-based game's fix: a focused button would otherwise swallow Space and Enter).
+ * turn-based game's fix: a focused button or checkbox would otherwise swallow
+ * Space and Enter).
  */
 export function useShortcuts(active: boolean): void {
   useEffect(() => {
@@ -31,7 +36,8 @@ export function useShortcuts(active: boolean): void {
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
-      const onButton = event.target instanceof HTMLButtonElement;
+      // A control reached with Tab keeps Space and Enter for itself.
+      const onButton = event.target instanceof HTMLButtonElement || event.target instanceof HTMLInputElement;
       const speed = SPEED_KEYS[key];
       if (speed !== undefined) {
         store.setSpeed(speed);
@@ -39,6 +45,7 @@ export function useShortcuts(active: boolean): void {
       }
       switch (key) {
         case ' ':
+          if (event.target instanceof HTMLInputElement) return;
           event.preventDefault();
           store.togglePause();
           return;
@@ -123,7 +130,7 @@ export function useShortcuts(active: boolean): void {
     };
     const release = (): void => {
       const focused = document.activeElement;
-      if (focused instanceof HTMLButtonElement) focused.blur();
+      if (focused instanceof HTMLButtonElement || (focused instanceof HTMLInputElement && !TEXT_INPUTS.has(focused.type))) focused.blur();
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerup', release);

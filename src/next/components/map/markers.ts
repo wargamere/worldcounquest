@@ -475,7 +475,8 @@ export function markerAt(markers: readonly Marker[], count: number, x: number, y
       bestDistance = d;
     }
   }
-  return best === null ? null : best.armies;
+  // A copy: marker arrays are pooled and rewritten every frame, and a press holds this until release.
+  return best === null ? null : best.armies.slice();
 }
 
 /** Every army whose marker centre lies inside the rectangle (CSS px), ascending id. */

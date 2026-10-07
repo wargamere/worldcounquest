@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { MARKET } from '@/next/game/balance';
+import { MARKET, START } from '@/next/game/balance';
 import { STOCK_LABELS } from '@/next/game/economy';
 import type { Good, Sim, TradePolicy } from '@/next/game/types';
 import { exchangeView, tradeOptions, type TradeOption } from '@/next/game/views';
@@ -13,6 +13,19 @@ import { Sparkline } from '../ui/Sparkline';
 import { Stepper } from '../ui/Stepper';
 
 const MAX_POLICY_DAYS = 30;
+
+/**
+ * Auto-trade counts days of upkeep, and no unit uses Steel day to day, so for
+ * Steel the days would mean nothing: it keeps (or sells above) the floor amount.
+ */
+function upkeepFree(good: Good): boolean {
+  return good === 'steel';
+}
+
+function policyLabel(good: Good, value: number): string {
+  if (value === 0) return 'off';
+  return upkeepFree(good) ? `${START.GOODS_MIN[good]}` : `${value} d`;
+}
 
 /** The Exchange (X, §3.7, §8.3): per good stock, net, prices, pressure, 14-day history, trades with live quotes and the auto-trade policy. */
 export function ExchangePanel() {
@@ -50,11 +63,11 @@ export function ExchangePanel() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="flex items-center gap-1.5 text-slate-400">
               Keep stocked
-              <Stepper value={g.policy.keepDays} min={0} max={MAX_POLICY_DAYS} label={`days of ${STOCK_LABELS[g.good]} to keep`} format={(v) => (v === 0 ? 'off' : `${v} d`)} onChange={(v) => setPolicy(g.good, 'keepDays', v)} />
+              <Stepper value={g.policy.keepDays} min={0} max={upkeepFree(g.good) ? 1 : MAX_POLICY_DAYS} label={upkeepFree(g.good) ? `${STOCK_LABELS[g.good]} to keep` : `days of ${STOCK_LABELS[g.good]} to keep`} format={(v) => policyLabel(g.good, v)} onChange={(v) => setPolicy(g.good, 'keepDays', v)} />
             </span>
             <span className="flex items-center gap-1.5 text-slate-400">
               Sell above
-              <Stepper value={g.policy.sellAboveDays} min={0} max={MAX_POLICY_DAYS} label={`days of ${STOCK_LABELS[g.good]} before selling`} format={(v) => (v === 0 ? 'off' : `${v} d`)} onChange={(v) => setPolicy(g.good, 'sellAboveDays', v)} />
+              <Stepper value={g.policy.sellAboveDays} min={0} max={upkeepFree(g.good) ? 1 : MAX_POLICY_DAYS} label={upkeepFree(g.good) ? `${STOCK_LABELS[g.good]} before selling` : `days of ${STOCK_LABELS[g.good]} before selling`} format={(v) => policyLabel(g.good, v)} onChange={(v) => setPolicy(g.good, 'sellAboveDays', v)} />
             </span>
           </div>
         </section>

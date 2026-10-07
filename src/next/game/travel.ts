@@ -45,5 +45,8 @@ export function retimeLeg(leg: Leg, oldSpeed: number, newSpeed: number): void {
   if (oldSpeed <= 0 || newSpeed <= 0 || oldSpeed === newSpeed) return;
   const rest = leg.ticks - leg.done;
   if (rest <= 0) return;
-  leg.ticks = leg.done + Math.max(1, Math.ceil((rest * oldSpeed) / newSpeed));
+  // Progress is scaled too, so the column keeps its place on the map (drawn at done / ticks).
+  const done = Math.round((leg.done * oldSpeed) / newSpeed);
+  leg.done = done;
+  leg.ticks = done + Math.max(1, Math.ceil((rest * oldSpeed) / newSpeed));
 }

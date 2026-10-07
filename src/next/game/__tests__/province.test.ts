@@ -95,7 +95,12 @@ describe('stability', () => {
     sim.state.nations[n('me')]!.shortage.food = true;
     hourlyProvinces(sim);
     const hunger = PROVINCE.STABILITY_HUNGER_PER_DAY / HOURS_PER_DAY;
-    expect(sim.state.provinces[p('b')]!.stability).toBeCloseTo(50 + 2 * drift + hunger, 12);
+    // Hungry provinces lose the penalty and do not drift back up, even at their target.
+    expect(sim.state.provinces[p('b')]!.stability).toBeCloseTo(50 + drift + hunger, 12);
+    const atTarget = sim.state.provinces[p('b')]!;
+    atTarget.stability = 100;
+    hourlyProvinces(sim);
+    expect(atTarget.stability).toBeCloseTo(100 + hunger, 12);
     // The foe is not short: its province stays where it was.
     expect(sim.state.provinces[p('f')]!.stability).toBe(100);
   });

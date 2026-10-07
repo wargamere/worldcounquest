@@ -31,7 +31,8 @@ function OrderBody({ preview, together, append }: { preview: OrderPreview; toget
           {view.ownerName}
         </p>
       </header>
-      {!noRoute && (
+      {!noRoute && append && <p className="text-slate-400">Added after the current route: the timing and odds are shown once it is ordered.</p>}
+      {!noRoute && !append && (
         <section aria-label="Routes" className="space-y-1">
           {view.routes.map((r) => {
             const key = `${r.groupSize}|${r.etaTicks}|${r.departInTicks}|${r.approachName ?? ''}`;
@@ -58,7 +59,7 @@ function OrderBody({ preview, together, append }: { preview: OrderPreview; toget
           </p>
         </section>
       )}
-      {preview.forecast !== null && <ForecastBlock forecast={preview.forecast} />}
+      {preview.forecast !== null && !append && <ForecastBlock forecast={preview.forecast} />}
       <Warnings warnings={preview.warnings} />
       <div className="flex flex-wrap gap-3 text-slate-300">
         {preview.routes.length >= 2 && (

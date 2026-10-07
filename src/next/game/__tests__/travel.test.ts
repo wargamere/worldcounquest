@@ -80,16 +80,17 @@ describe('legs', () => {
     expect(legProgress({ ...leg, done: 4 }, 0.9)).toBe(1);
   });
 
-  it('re-times the rest of a leg: done + ceil(rest × old / new)', () => {
+  it('re-times a leg keeping its share covered: done × k, then + ceil(rest × k)', () => {
     const leg: Leg = { from: 0 as Leg['from'], to: 1 as Leg['to'], ticks: 20, done: 5, sea: false };
     retimeLeg(leg, 30, 15);
-    expect(leg.ticks).toBe(5 + 30);
+    expect(leg).toMatchObject({ done: 10, ticks: 10 + 30 });
     retimeLeg(leg, 15, 30);
-    expect(leg.ticks).toBe(5 + 15);
+    expect(leg).toMatchObject({ done: 5, ticks: 5 + 15 });
+    expect(leg.done / leg.ticks).toBeCloseTo(5 / 20, 9);
     const odd: Leg = { ...leg, ticks: 12, done: 5 };
     retimeLeg(odd, 30, 15);
-    expect(odd.ticks).toBe(5 + 14);
-    retimeLeg(odd, 15, 30);
-    expect(odd.ticks).toBe(5 + 7);
+    expect(odd).toMatchObject({ done: 10, ticks: 10 + 14 });
+    retimeLeg(odd, 30, 30);
+    expect(odd).toMatchObject({ done: 10, ticks: 24 });
   });
 });
