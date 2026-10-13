@@ -13,7 +13,7 @@ import { Icon } from '../ui/Icon';
 export function ResourceChip({ chip, open, onToggle }: { chip: StockChip; open: boolean; onToggle: () => void }) {
   const urgent = chip.daysLeft !== null && chip.daysLeft < 1;
   const runsOut = chip.netPerDay < 0 && chip.daysLeft !== null;
-  const tone = chip.short ? 'border-rose-500 bg-rose-950/60 text-rose-100' : 'border-slate-700 bg-slate-900 text-slate-100';
+  const tone = chip.short ? 'border-rose-500 bg-rose-950/60 text-rose-100 shadow-[0_0_12px_rgba(244,63,94,0.35)]' : 'hud-chip text-slate-100';
   const label = `${STOCK_LABELS[chip.key]} ${Math.round(chip.amount)}${chip.cap === null ? '' : ` of ${Math.round(chip.cap)}`}, ${signedCompact(chip.netPerDay)} per day${chip.short ? ', short' : ''}${runsOut ? `, runs out in ${formatDays(chip.daysLeft ?? 0)}` : ''}${chip.auto ? ', kept stocked automatically' : ''}`;
   return (
     <button

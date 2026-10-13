@@ -30,7 +30,7 @@ export function CompactBar() {
     act().setSpeed(CYCLE[(i + 1) % CYCLE.length] ?? 1);
   };
   return (
-    <header className="relative shrink-0 border-b border-slate-800 bg-slate-950">
+    <header className="hud-bar relative shrink-0">
       <div className="flex h-12 items-center gap-2 px-2">
         <button
           type="button"

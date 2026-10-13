@@ -427,7 +427,7 @@ export const RENDER = {
   WORLD_HEIGHT: 1000, // projected base space height
   MAX_ZOOM: 64, // d3-zoom scale extent upper bound
   MAX_CANVAS_PIXELS: 4_000_000, // DPR is capped so no canvas exceeds 4 megapixels...
-  MAX_BASE_CANVAS_PIXELS: 10_000_000, // ...except the base map, which carries gesture margins (2.25x the view): borders and labels at native resolution on a 1440 px Retina screen
+  MAX_BASE_CANVAS_PIXELS: 8_000_000, // ...except the base map, which carries gesture margins (2.25x the view); 8 + 4 MP keeps both canvases within 48 MB
   MAX_DPR: 2, // and never above 2
   STAR_PROVINCES: 20, // below city-dot zoom, only your capital and those of nations this big get a star (78 nations start with 8+ provinces)
   BATCH_FILLS_BELOW_ZOOM: 3, // below this zoom fills are batched by colour
@@ -446,6 +446,7 @@ export const RENDER = {
   MARKER_H: 18, // chip height, mouse
   MARKER_W_TOUCH: 32, // chip width, touch
   MARKER_H_TOUCH: 22, // chip height, touch
+  MARKER_GLYPH_EXTRA_W: 12, // chips widen by this much at glyph zoom, for the unit silhouette
   HIT_RADIUS_FINE: 14, // marker hit radius, mouse
   HIT_RADIUS_COARSE: 22, // marker hit radius, touch
   TINY_PROVINCE_PX2: 400, // a province this small on screen...

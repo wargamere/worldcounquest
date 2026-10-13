@@ -40,6 +40,9 @@ function recorder(width: number, height: number): Recorder {
   const special: Record<string, (...args: unknown[]) => unknown> = {
     measureText: (text) => ({ width: String(text).length * 6 }),
     createPattern: () => ({ setTransform: () => undefined }),
+    createImageData: (w, h) => ({ data: new Uint8ClampedArray(Number(w) * Number(h) * 4) }),
+    createLinearGradient: () => ({ addColorStop: () => undefined }),
+    createRadialGradient: () => ({ addColorStop: () => undefined }),
   };
   const ctx = new Proxy(props, {
     get(target, key: string) {
@@ -79,7 +82,7 @@ const g = buildGeometry(topology, sim.map);
 
 describe('drawing on the real map', () => {
   it('batches fills by colour below zoom 3 and culls single fills above it', async () => {
-    const { buildArcPath, buildSeaLinkPath, provincePathsFor } = await import('../paths');
+    const { buildArcPath, buildSeaLinkPath, buildTerrainPaths, provincePathsFor } = await import('../paths');
     const { drawBase, drawBaseLabels } = await import('../drawBase');
     const { provinceFills, nationLabels, capitalStars } = await import('../scene');
     const owners = sim.state.provinces.map((p) => p.owner);
@@ -91,6 +94,8 @@ describe('drawing on the real map', () => {
       fills: fills.fills,
       hatched: fills.hatched,
       internal: buildArcPath(g, isProvinceBorder),
+      coast: buildArcPath(g, (a) => a.right === null),
+      terrain: buildTerrainPaths(sim.map, provincePathsFor(g)),
       nations: buildArcPath(g, (a) => isNationBorder(a, owners)),
       player: buildArcPath(g, (a) => isPlayerBorder(a, owners, sim.state.player)),
       seaLinks: buildSeaLinkPath(sim.map, g),
@@ -99,17 +104,19 @@ describe('drawing on the real map', () => {
     const colours = new Set(fills.fills).size;
     const r = recorder(1440, 900);
     drawBase(r.ctx, scene, g, { k: 0.7, x: 20, y: 50 }, 1, null);
-    // Sphere, then a solid and a hatched fill per colour, plus the hatch pattern over the one hatched batch.
-    expect(r.calls.get('fill')).toBe(1 + 2 * colours + colours);
-    expect(r.calls.get('stroke')).toBe(4);
+    const terrains = scene.terrain.size;
+    // Sea and ocean texture, a solid and a hatched fill per colour, the relief per terrain, then the hatch pattern per colour.
+    expect(r.calls.get('fill')).toBe(2 + 2 * colours + terrains + colours);
+    // Atmosphere (3), graticule, shallows (3), coast, nation casing and line, player glow and line, sea links.
+    expect(r.calls.get('stroke')).toBe(13);
 
     r.reset();
     drawBase(r.ctx, scene, g, { k: 8, x: -8000, y: -2400 }, 1, null);
     const fillsAtZoom = r.calls.get('fill')!;
     expect(fillsAtZoom).toBeGreaterThan(1);
     expect(fillsAtZoom).toBeLessThan(200);
-    // Internal borders join in from zoom 2.
-    expect(r.calls.get('stroke')).toBe(5);
+    // Internal borders (shade and line) join in from zoom 2.
+    expect(r.calls.get('stroke')).toBe(15);
 
     r.reset();
     drawBase(r.ctx, scene, g, { k: 8, x: -8000, y: -2400 }, 1, [{ x: 10, y: 10, w: 20, h: 20 }]);

@@ -18,10 +18,10 @@ export function TopBar() {
   const hud = useSimView(useCallback((sim: Sim) => hudView(sim, showAll), [showAll]));
   if (hud === null) return null;
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-950 px-3">
+    <header className="hud-bar flex h-14 shrink-0 items-center gap-3 px-3">
       <button type="button" onClick={() => act().focusHome()} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-slate-900" title="Frame your nation (H)">
         <span aria-hidden className="h-3 w-3 rounded-full ring-2 ring-amber-400" style={{ background: hud.colour }} />
-        <span className="max-w-[9rem] truncate text-sm font-semibold text-slate-100">{hud.nation}</span>
+        <span className="gold-text max-w-[9rem] truncate text-[15px] font-extrabold tracking-wide">{hud.nation}</span>
       </button>
       <span className="whitespace-nowrap text-sm font-medium tabular-nums text-slate-200" aria-live="off">
         {hud.clock}
