@@ -23,7 +23,7 @@ export function PhoneLayout({ landscape }: { landscape: boolean }) {
   return (
     <div className="flex h-full flex-col">
       <CompactBar />
-      <div className="h-10 shrink-0 border-b border-slate-800 bg-slate-950 px-2 py-1">
+      <div className="hud-bar h-10 shrink-0 px-2 py-1">
         <ChipRow withAlerts />
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden">

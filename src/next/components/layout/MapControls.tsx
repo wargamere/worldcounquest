@@ -24,13 +24,13 @@ export function MapControls({ phone }: { phone: boolean }) {
   const mode = useGameStore((s) => s.mapMode);
   const size = phone ? 'h-11 w-11' : 'h-8 w-8';
   const button = (icon: IconName, label: string, run: () => void) => (
-    <button type="button" aria-label={label} title={label} onClick={run} className={`grid ${size} place-items-center rounded border border-slate-700 bg-slate-950/90 text-slate-200 hover:border-slate-500`}>
+    <button type="button" aria-label={label} title={label} onClick={run} className={`grid ${size} place-items-center rounded map-glass text-slate-200 hover:border-slate-400`}>
       <Icon name={icon} size={16} />
     </button>
   );
   return (
     <div className={`absolute z-20 flex flex-col items-end gap-1 ${phone ? 'bottom-32 left-2 items-start' : 'bottom-3 right-3'}`}>
-      <button type="button" onClick={() => act().setMapMode(nextMapMode(mode))} title="Map mode (V)" className="flex h-8 items-center gap-1 rounded border border-slate-700 bg-slate-950/90 px-2 text-xs text-slate-200 hover:border-slate-500">
+      <button type="button" onClick={() => act().setMapMode(nextMapMode(mode))} title="Map mode (V)" className="map-glass flex h-8 items-center gap-1 rounded px-2 text-xs text-slate-200 hover:border-slate-400">
         <Icon name="layers" size={14} /> {MODE_TEXT[mode]}
       </button>
       {!phone && button('plus', 'Zoom in', () => getMapHandle()?.zoomBy(ZOOM_STEP))}

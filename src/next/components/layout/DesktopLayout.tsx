@@ -39,7 +39,7 @@ export function DesktopLayout() {
           </button>
         </div>
         {open && (
-          <aside className="flex w-[360px] shrink-0 flex-col border-l border-slate-800 bg-slate-950" aria-label="Side panel">
+          <aside className="side-panel flex w-[360px] shrink-0 flex-col" aria-label="Side panel">
             <div className="min-h-0 max-h-[62%] overflow-y-auto">
               <ContextPanel />
             </div>

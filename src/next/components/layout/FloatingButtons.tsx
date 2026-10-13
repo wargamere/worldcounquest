@@ -25,7 +25,7 @@ export function FloatingButtons() {
     ),
   );
   if (data === null) return null;
-  const round = 'relative grid h-12 w-12 place-items-center rounded-full border border-slate-700 bg-slate-950/90 text-slate-200 shadow-lg';
+  const round = 'relative grid h-12 w-12 place-items-center rounded-full map-glass text-slate-200';
   return (
     <div className="absolute right-2 top-2 z-20 flex flex-col items-end gap-2">
       <button type="button" aria-label="Frame your nation" onClick={() => act().focusHome()} className={round}>

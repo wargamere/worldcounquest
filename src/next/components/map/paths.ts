@@ -5,7 +5,7 @@
  * low-zoom fills are one solid and one hatched path per colour, rebuilt only
  * for the colours whose provinces changed.
  */
-import type { MapStatic } from '@/next/game/types';
+import type { MapStatic, Terrain } from '@/next/game/types';
 import type { MapArc, MapGeometry } from '@/next/lib/geometry';
 
 const provincePathCache = new WeakMap<MapGeometry, Path2D[]>();
@@ -35,6 +35,20 @@ export function buildProvincePaths(g: MapGeometry): Path2D[] {
       path.closePath();
     }
     out[p] = path;
+  }
+  return out;
+}
+
+/** One path per terrain class holding every province of that terrain (terrain never changes, so built once). */
+export function buildTerrainPaths(map: MapStatic, paths: readonly Path2D[]): ReadonlyMap<Terrain, Path2D> {
+  const out = new Map<Terrain, Path2D>();
+  for (const fact of map.provinces) {
+    let path = out.get(fact.terrain);
+    if (path === undefined) {
+      path = new Path2D();
+      out.set(fact.terrain, path);
+    }
+    path.addPath(paths[fact.ix]!);
   }
   return out;
 }

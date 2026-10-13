@@ -26,7 +26,7 @@ import { drawBase, drawBaseLabels, type BaseScene } from './drawBase';
 import { drawDragLine, drawOverlay, hitRadius, setReducedMotion } from './drawOverlay';
 import { attachInput, type InputFeedback, type MapPick } from './input';
 import { armiesInRect, layoutMarkers, markerAt, type Marker } from './markers';
-import { buildArcPath, buildSeaLinkPath, provincePathsFor } from './paths';
+import { buildArcPath, buildSeaLinkPath, buildTerrainPaths, provincePathsFor } from './paths';
 import { capitalStars, changedProvinces, dirtyRects, fillKey, nationLabels, ownerChanges, provinceFills, type Fills, type NationLabel } from './scene';
 import type { Camera, MapFrame, MapHandle, MapInputHandlers } from './types';
 
@@ -63,6 +63,9 @@ export function createMapController(o: MapControllerOptions): MapController {
   const g = o.geometry;
   const paths = provincePathsFor(g);
   const internal = buildArcPath(g, isProvinceBorder);
+  // An arc with nothing on its other side is a coast.
+  const coast = buildArcPath(g, (arc) => arc.right === null);
+  const terrain = buildTerrainPaths(map, paths);
   const seaLinks = buildSeaLinkPath(map, g);
   const grid = buildHitGrid(g, RENDER.HIT_GRID_CELL);
   const baseContext = base.getContext('2d', { alpha: false });
@@ -111,6 +114,8 @@ export function createMapController(o: MapControllerOptions): MapController {
     fills: fills?.fills ?? [],
     hatched: fills?.hatched ?? [],
     internal,
+    coast,
+    terrain,
     nations,
     player,
     seaLinks,

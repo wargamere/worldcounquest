@@ -12,7 +12,7 @@ export function SpeedControl() {
   const throttled = useGameStore((s) => s.throttled);
   const effective = useGameStore((s) => s.effectiveSpeed);
   return (
-    <div className="flex items-center gap-0.5 rounded border border-slate-700 bg-slate-900 p-0.5" role="group" aria-label="Game speed" data-coach="speed">
+    <div className="hud-chip flex items-center gap-0.5 rounded border p-0.5" role="group" aria-label="Game speed" data-coach="speed">
       {TIME.SPEEDS.map((s: Speed) => (
         <button
           key={s}

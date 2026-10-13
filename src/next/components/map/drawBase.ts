@@ -1,21 +1,26 @@
 /**
- * The base layer (§9.1, §9.3): sphere, graticule, province fills, the occupied
- * hatch, province, nation and player borders, sea links, then (in screen
- * space) city dots, province names, nation labels and capital stars.
+ * The base layer (§9.1, §9.3): the textured ocean and its graticule, the
+ * atmosphere rim, a shallow-water glow along every coast, province fills with
+ * terrain relief blended over them, the occupied hatch, then province, coast,
+ * nation and player borders and sea links; then (in screen space) city dots,
+ * province names, nation labels and capital stars.
  *
  * The camera is applied with one setTransform and line widths are divided by
- * k, so nothing is re-projected. Below RENDER.BATCH_FILLS_BELOW_ZOOM fills are
- * one path per colour; from there on provinces are filled one by one, culled
- * to the view. A `clip` list repaints only those screen rectangles (the
- * ownership dirty rects); null repaints everything.
+ * k, so nothing is re-projected. Textures are scaled by 1/k for the same
+ * reason: one texel stays one CSS pixel at every zoom. Below
+ * RENDER.BATCH_FILLS_BELOW_ZOOM fills are one path per colour; from there on
+ * provinces are filled one by one, culled to the view. A `clip` list repaints
+ * only those screen rectangles (the ownership dirty rects); null repaints
+ * everything.
  */
 import { RENDER } from '@/next/game/balance';
 import { PLAYER_COLOUR } from '@/next/game/colours';
-import type { MapMode, ProvinceIx, Sim } from '@/next/game/types';
+import type { MapMode, ProvinceIx, Sim, Terrain } from '@/next/game/types';
 import type { MapGeometry } from '@/next/lib/geometry';
 import { toBase, toScreen } from './camera';
 import { changedColours, colourBatches, rebuildColours, type ColourBatch } from './paths';
 import type { NationLabel } from './scene';
+import { texturesFor } from './textures';
 import type { Camera } from './types';
 
 export interface BaseScene {
@@ -23,6 +28,8 @@ export interface BaseScene {
   fills: readonly string[];
   hatched: readonly boolean[];
   internal: Path2D;
+  coast: Path2D;
+  terrain: ReadonlyMap<Terrain, Path2D>;
   nations: Path2D;
   player: Path2D;
   seaLinks: Path2D;
@@ -37,24 +44,36 @@ export interface Rect {
 }
 
 export const BASE_COLOURS = {
-  space: '#05080f',
-  sea: '#0b1120',
-  graticule: 'rgba(148, 163, 184, 0.10)',
-  internal: 'rgba(8, 12, 22, 0.45)',
-  nation: 'rgba(5, 8, 15, 0.92)',
+  space: '#03060c',
+  sea: '#0b1b34',
+  graticule: 'rgba(148, 197, 255, 0.07)',
+  atmosphere: ['rgba(56, 189, 248, 0.06)', 'rgba(56, 189, 248, 0.14)', 'rgba(125, 211, 252, 0.35)'],
+  shallows: ['rgba(125, 211, 252, 0.05)', 'rgba(125, 211, 252, 0.09)', 'rgba(186, 230, 253, 0.16)'],
+  coast: 'rgba(2, 6, 23, 0.7)',
+  internal: 'rgba(255, 255, 255, 0.11)',
+  internalShade: 'rgba(3, 6, 12, 0.28)',
+  nationCasing: 'rgba(3, 6, 12, 0.45)',
+  nation: 'rgba(3, 6, 12, 0.92)',
   /** Nation borders in the non-political modes, where fills do not show owners. */
   nationOnData: 'rgba(255, 255, 255, 0.75)',
   player: PLAYER_COLOUR,
-  seaLink: 'rgba(148, 163, 184, 0.55)',
-  hatch: 'rgba(5, 8, 15, 0.5)',
-  cityDot: 'rgba(241, 245, 249, 0.85)',
-  label: '#e2e8f0',
-  labelHalo: 'rgba(5, 8, 15, 0.85)',
+  playerGlow: 'rgba(242, 193, 78, 0.22)',
+  seaLink: 'rgba(186, 230, 253, 0.42)',
+  hatch: 'rgba(3, 6, 12, 0.42)',
+  cityDot: 'rgba(248, 250, 252, 0.9)',
+  cityRing: 'rgba(3, 6, 12, 0.7)',
+  label: '#e8eef6',
+  nationLabel: 'rgba(248, 250, 252, 0.9)',
+  labelHalo: 'rgba(3, 6, 12, 0.82)',
   star: '#f8fafc',
+  starGlow: 'rgba(255, 255, 255, 0.35)',
+  playerStarGlow: 'rgba(242, 193, 78, 0.55)',
 } as const;
 
 /** Stroke widths in CSS px. */
-const WIDTH = { graticule: 0.6, internal: 0.6, nation: 1.2, player: 2.2, seaLink: 1 } as const;
+const WIDTH = { graticule: 0.6, internal: 0.6, coast: 0.9, nationCasing: 3, nation: 1.1, player: 2, playerGlow: 7, seaLink: 1, atmosphere: [18, 8, 1.5], shallows: [16, 8, 3] } as const;
+/** How strongly terrain relief shows through, by map mode (terrain mode is all relief). */
+const RELIEF_ALPHA: Readonly<Record<MapMode, number>> = { political: 0.7, terrain: 0.9, resources: 0.45, stability: 0.4, supply: 0.4 };
 /** Hatch stripes repeat every this many CSS px at every zoom. */
 const HATCH_PX = 7;
 /** Sea links are dotted: dash and gap in CSS px. */
@@ -173,6 +192,9 @@ export function drawBase(ctx: CanvasRenderingContext2D, scene: BaseScene, g: Map
   const cssW = ctx.canvas.width / dpr;
   const cssH = ctx.canvas.height / dpr;
   const k = c.k;
+  const textures = texturesFor(ctx);
+  // Textures keep one texel per CSS pixel: undo the camera scale in each pattern.
+  const unscale = new DOMMatrix([1 / k, 0, 0, 1 / k, 0, 0]);
   ctx.save();
   applyClip(ctx, dpr, clip);
   ctx.fillStyle = BASE_COLOURS.space;
@@ -183,24 +205,39 @@ export function drawBase(ctx: CanvasRenderingContext2D, scene: BaseScene, g: Map
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   const { sphere, graticule } = sphereOf(g);
+
+  // The atmosphere: a soft rim of light around the globe, widest and faintest first.
+  for (let i = 0; i < WIDTH.atmosphere.length; i++) {
+    ctx.strokeStyle = BASE_COLOURS.atmosphere[i]!;
+    ctx.lineWidth = WIDTH.atmosphere[i]! / k;
+    ctx.stroke(sphere);
+  }
   ctx.fillStyle = BASE_COLOURS.sea;
   ctx.fill(sphere);
+  if (textures.ocean !== null) {
+    textures.ocean.setTransform(unscale);
+    ctx.fillStyle = textures.ocean;
+    ctx.fill(sphere);
+  }
   ctx.strokeStyle = BASE_COLOURS.graticule;
   ctx.lineWidth = WIDTH.graticule / k;
   ctx.stroke(graticule);
 
-  const pattern = scene.mode === 'political' ? hatchPattern(ctx) : null;
-  // Stripes keep a constant on-screen width: undo the camera scale in the pattern.
-  pattern?.setTransform(new DOMMatrix([1 / k, 0, 0, 1 / k, 0, 0]));
+  // Shallow water: a glow along every coast, which the land then covers on its own side.
+  for (let i = 0; i < WIDTH.shallows.length; i++) {
+    ctx.strokeStyle = BASE_COLOURS.shallows[i]!;
+    ctx.lineWidth = WIDTH.shallows[i]! / k;
+    ctx.stroke(scene.coast);
+  }
+
+  const political = scene.mode === 'political';
+  const pattern = political ? hatchPattern(ctx) : null;
+  pattern?.setTransform(unscale);
   if (k < RENDER.BATCH_FILLS_BELOW_ZOOM) {
     for (const [colour, batch] of batchesFor(g, scene)) {
       ctx.fillStyle = colour;
       ctx.fill(batch.solid);
       ctx.fill(batch.hatched);
-      if (pattern !== null) {
-        ctx.fillStyle = pattern;
-        ctx.fill(batch.hatched);
-      }
     }
   } else {
     const box = viewBox(c, cssW, cssH, clip);
@@ -208,21 +245,54 @@ export function drawBase(ctx: CanvasRenderingContext2D, scene: BaseScene, g: Map
       if (!boxVisible(g, p, box)) continue;
       ctx.fillStyle = scene.fills[p]!;
       ctx.fill(scene.paths[p]!);
-      if (pattern !== null && scene.hatched[p] === true) {
-        ctx.fillStyle = pattern;
-        ctx.fill(scene.paths[p]!);
-      }
+    }
+  }
+
+  // Terrain relief over the fills: mid-grey tiles under 'overlay' keep each colour and add light and shade.
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.globalAlpha = RELIEF_ALPHA[scene.mode];
+  for (const [terrain, path] of scene.terrain) {
+    const relief = textures.relief[terrain];
+    if (relief === null) continue;
+    relief.setTransform(unscale);
+    ctx.fillStyle = relief;
+    ctx.fill(path);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+
+  if (pattern !== null) {
+    ctx.fillStyle = pattern;
+    if (k < RENDER.BATCH_FILLS_BELOW_ZOOM) for (const batch of batchesFor(g, scene).values()) ctx.fill(batch.hatched);
+    else {
+      const box = viewBox(c, cssW, cssH, clip);
+      for (let p = 0; p < scene.paths.length; p++) if (scene.hatched[p] === true && boxVisible(g, p, box)) ctx.fill(scene.paths[p]!);
     }
   }
 
   if (k >= RENDER.PROVINCE_BORDERS_FROM_ZOOM) {
+    // A dark line with a faint light edge reads as an engraved border on any colour.
+    ctx.strokeStyle = BASE_COLOURS.internalShade;
+    ctx.lineWidth = (WIDTH.internal * 2) / k;
+    ctx.stroke(scene.internal);
     ctx.strokeStyle = BASE_COLOURS.internal;
     ctx.lineWidth = WIDTH.internal / k;
     ctx.stroke(scene.internal);
   }
-  ctx.strokeStyle = scene.mode === 'political' ? BASE_COLOURS.nation : BASE_COLOURS.nationOnData;
+  ctx.strokeStyle = BASE_COLOURS.coast;
+  ctx.lineWidth = WIDTH.coast / k;
+  ctx.stroke(scene.coast);
+  if (political) {
+    ctx.strokeStyle = BASE_COLOURS.nationCasing;
+    ctx.lineWidth = WIDTH.nationCasing / k;
+    ctx.stroke(scene.nations);
+  }
+  ctx.strokeStyle = political ? BASE_COLOURS.nation : BASE_COLOURS.nationOnData;
   ctx.lineWidth = WIDTH.nation / k;
   ctx.stroke(scene.nations);
+  ctx.strokeStyle = BASE_COLOURS.playerGlow;
+  ctx.lineWidth = WIDTH.playerGlow / k;
+  ctx.stroke(scene.player);
   ctx.strokeStyle = BASE_COLOURS.player;
   ctx.lineWidth = WIDTH.player / k;
   ctx.stroke(scene.player);
@@ -261,6 +331,22 @@ function haloText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
   ctx.fillText(text, x, y);
 }
 
+/** Letter spacing where the browser supports it on canvas (older Safari ignores it). */
+function setSpacing(ctx: CanvasRenderingContext2D, px: number): void {
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${px.toFixed(1)}px`;
+}
+
+/** A soft round glow behind a capital star. */
+function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, colour: string): void {
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
+  gradient.addColorStop(0, colour);
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
 function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   ctx.beginPath();
   for (let i = 0; i < 10; i++) {
@@ -297,6 +383,7 @@ export function drawBaseLabels(ctx: CanvasRenderingContext2D, labels: BaseLabels
     const [x, y] = toScreen(c, g.anchor[2 * p]!, g.anchor[2 * p + 1]!);
     if (!inView(x, y)) continue;
     const ours = sim.state.provinces[p]!.owner === sim.state.player;
+    glow(ctx, x, y, STAR_PX * 2.4, ours ? BASE_COLOURS.playerStarGlow : BASE_COLOURS.starGlow);
     star(ctx, x, y, STAR_PX);
     ctx.fillStyle = ours ? BASE_COLOURS.player : BASE_COLOURS.star;
     ctx.lineWidth = 1.5;
@@ -308,18 +395,24 @@ export function drawBaseLabels(ctx: CanvasRenderingContext2D, labels: BaseLabels
 
   if (k >= RENDER.CITY_DOTS_FROM_ZOOM) {
     ctx.fillStyle = BASE_COLOURS.cityDot;
+    ctx.strokeStyle = BASE_COLOURS.cityRing;
+    ctx.lineWidth = 1.2;
     for (const fact of map.provinces) {
       if (fact.city === null || !boxVisible(g, fact.ix, box)) continue;
       const [x, y] = toScreen(c, g.anchor[2 * fact.ix]!, g.anchor[2 * fact.ix + 1]!);
       ctx.beginPath();
       ctx.arc(x, y, CITY_DOT_PX, 0, 2 * Math.PI);
+      ctx.stroke();
       ctx.fill();
     }
+    ctx.strokeStyle = BASE_COLOURS.labelHalo;
   }
 
   if (k >= RENDER.PROVINCE_NAMES_FROM_ZOOM) {
-    ctx.font = `500 ${PROVINCE_FONT}px system-ui, sans-serif`;
+    ctx.font = `600 ${PROVINCE_FONT}px system-ui, sans-serif`;
     ctx.fillStyle = BASE_COLOURS.label;
+    ctx.lineWidth = 3;
+    setSpacing(ctx, 0.3);
     // Bigger provinces claim their space first.
     const visible = map.provinces.filter((f) => boxVisible(g, f.ix, box)).sort((a, b) => g.area[b.ix]! - g.area[a.ix]! || a.ix - b.ix);
     for (const fact of visible) {
@@ -334,15 +427,18 @@ export function drawBaseLabels(ctx: CanvasRenderingContext2D, labels: BaseLabels
   }
 
   if (k < RENDER.NATION_LABELS_BELOW_ZOOM) {
-    ctx.fillStyle = BASE_COLOURS.label;
+    // Nations as atlas lettering: capitals, widely spaced, on a soft halo.
+    ctx.fillStyle = BASE_COLOURS.nationLabel;
     for (const label of labels.nations) {
       const [x, y] = toScreen(c, label.x, label.y);
       if (!inView(x, y)) continue;
       const size = Math.min(NATION_FONT_MAX, NATION_FONT_PER_SQRT_PX * Math.sqrt(label.area) * k);
       // Too small to read: the remaining labels are smaller still.
       if (size < NATION_FONT_MIN) break;
-      const name = map.nations[label.nation]!.name;
-      ctx.font = `600 ${size.toFixed(1)}px system-ui, sans-serif`;
+      const name = map.nations[label.nation]!.name.toUpperCase();
+      ctx.font = `700 ${size.toFixed(1)}px system-ui, sans-serif`;
+      setSpacing(ctx, size * 0.12);
+      ctx.lineWidth = Math.max(2.5, size * 0.17);
       const width = ctx.measureText(name).width;
       const rect = { x: x - width / 2 - LABEL_PAD, y: y - size / 2 - LABEL_PAD, w: width + 2 * LABEL_PAD, h: size + 2 * LABEL_PAD };
       if (overlaps(placed, rect)) continue;

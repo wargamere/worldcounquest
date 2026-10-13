@@ -57,6 +57,7 @@ export function MapArea({ phone }: { phone: boolean }) {
   return (
     <div className="absolute inset-0 bg-[#0b1a2e]">
       <MapCanvas map={map} geometry={geometry} getFrame={getFrame} handlers={handlers} onReady={onReady} />
+      <div aria-hidden className="map-vignette" />
       {!coarse && <HoverTooltip />}
       {info !== null && <ProvinceInfoCard province={info} onClose={() => setInfo(null)} />}
       <MapControls phone={phone} />

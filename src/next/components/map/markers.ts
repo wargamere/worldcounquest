@@ -69,8 +69,10 @@ export function markerLod(k: number): MarkerLod {
   return k < RENDER.GLYPH_MARKERS_FROM_ZOOM ? 'chips' : 'glyphs';
 }
 
-export function chipSize(coarse: boolean): { w: number; h: number } {
-  return coarse ? { w: RENDER.MARKER_W_TOUCH, h: RENDER.MARKER_H_TOUCH } : { w: RENDER.MARKER_W, h: RENDER.MARKER_H };
+/** Chip size in CSS px; at glyph zoom chips widen to fit the unit silhouette beside the count. */
+export function chipSize(coarse: boolean, lod: MarkerLod = 'chips'): { w: number; h: number } {
+  const base = coarse ? { w: RENDER.MARKER_W_TOUCH, h: RENDER.MARKER_H_TOUCH } : { w: RENDER.MARKER_W, h: RENDER.MARKER_H };
+  return lod === 'glyphs' ? { w: base.w + RENDER.MARKER_GLYPH_EXTRA_W, h: base.h + 2 } : base;
 }
 
 /**
@@ -312,7 +314,7 @@ export function layoutMarkers(frame: MapFrame, g: MapGeometry, c: Camera, viewW:
   const player = state.player;
   const lod = markerLod(c.k);
   const aggregate = lod === 'aggregate';
-  const { w, h } = chipSize(frame.coarse);
+  const { w, h } = chipSize(frame.coarse, lod);
   const cap = frame.coarse ? RENDER.MAX_MARKERS_COARSE : RENDER.MAX_MARKERS_FINE;
   const hops = aggregate ? hopsFromPlayerLand(sim) : null;
   const supply = playerSupply(sim).supplied;
